@@ -20,6 +20,23 @@ health()  { curl -fsS -m 2 "http://127.0.0.1:$1/api/health" 2>/dev/null | grep -
 vipa_up() { curl -fsS -m 2 "http://127.0.0.1:$1/api/health" 2>/dev/null | grep -q '"seq"'; }
 taken()   { lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | grep -q .; }
 
+tunnel_url() {  # $1 = local port; prints the https url of a tunnel pointing at it
+  _tmp="$(mktemp)"
+  curl -s -m 2 http://127.0.0.1:4040/api/tunnels > "$_tmp" 2>/dev/null || true
+  python3 -c '
+import json, sys
+try:
+    for x in json.load(open(sys.argv[1])).get("tunnels", []):
+        addr = x.get("config", {}).get("addr", "")
+        if addr.endswith(":" + sys.argv[2]) and x["public_url"].startswith("https"):
+            print(x["public_url"])
+            break
+except Exception:
+    pass
+' "$_tmp" "$1"
+  rm -f "$_tmp"
+}
+
 command -v hermes >/dev/null 2>&1 || die "hermes not found"
 [ -d "$H" ] || die "$H not found"
 
@@ -121,18 +138,20 @@ if [ "${VIPA_NGROK:-0}" = "1" ]; then
   else
     NGLOG="${TMPDIR:-/tmp}/vipa-ngrok.log"
     NGURL="${VIPA_NGROK_URL:-$(grep -m1 '^VIPA_NGROK_URL=' "$ENV" 2>/dev/null | cut -d= -f2- || true)}"
-    pkill -f "ngrok http .*$PORT" 2>/dev/null || true
-    if [ -n "${NGURL:-}" ]; then
+    NGTUNNEL="$(tunnel_url "$PORT")"
+    if [ -n "${NGTUNNEL:-}" ]; then
+      URL="$NGTUNNEL"
+      say "ngrok already tunnelling $PORT -> $URL"
+    elif [ -n "${NGURL:-}" ]; then
       nohup ngrok http --url="$NGURL" "$PORT" --log=stdout > "$NGLOG" 2>&1 &
     else
       nohup ngrok http "$PORT" --log=stdout > "$NGLOG" 2>&1 &
+      for _ in $(seq 1 20); do
+        NGTUNNEL="$(tunnel_url "$PORT")"
+        [ -n "${NGTUNNEL:-}" ] && break
+        sleep 1
+      done
     fi
-    for _ in $(seq 1 20); do
-      NGTUNNEL=$(curl -s -m 2 http://127.0.0.1:4040/api/tunnels 2>/dev/null \
-          | python3 -c 'import json,sys; t=json.load(sys.stdin)["tunnels"]; print([x["public_url"] for x in t if x["public_url"].startswith("https")][0])' 2>/dev/null || true)
-      [ -n "${NGTUNNEL:-}" ] && break
-      sleep 1
-    done
     if [ -n "${NGTUNNEL:-}" ]; then
       URL="$NGTUNNEL"
       say "ngrok -> $URL"

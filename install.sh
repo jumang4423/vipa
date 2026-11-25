@@ -126,6 +126,13 @@ if [ -z "$SERIAL" ] && [ -n "$ADB_BIN" ]; then
   SERIAL="$("$ADB_BIN" devices | awk 'NR>1 && $2=="device"{print $1}')"
   N="$(printf '%s' "$SERIAL" | grep -c . || true)"
   if [ "$N" != "1" ]; then
+    # エミュレータは無視して、実機が1台だけならそれを使う
+    REAL="$(printf '%s\n' "$SERIAL" | grep -v '^emulator-' || true)"
+    if [ "$(printf '%s' "$REAL" | grep -c . || true)" = "1" ]; then
+      SERIAL="$REAL"; N="1"
+    fi
+  fi
+  if [ "$N" != "1" ]; then
     say "端末が1台に定まらない（${N}台）。VIPA_SERIAL=<serial> を付けて再実行"
     SERIAL=""
   fi

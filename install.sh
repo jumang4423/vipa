@@ -25,12 +25,10 @@ command -v hermes >/dev/null 2>&1 || die "hermes not found"
 
 # ---------------------------------------------------------------- 1. plugin
 mkdir -p "$H/plugins"
-SHA_FILE="$H/.vipa-adapter.sha"
 NEW_SHA="$(shasum -a 256 "$SRC/adapter.py" | cut -d' ' -f1)"
-OLD_SHA="$(cat "$SHA_FILE" 2>/dev/null || true)"
+OLD_SHA="$(shasum -a 256 "$DST/adapter.py" 2>/dev/null | cut -d' ' -f1 || true)"
 rm -rf "$DST"
 cp -R "$SRC" "$DST"
-printf '%s\n' "$NEW_SHA" > "$SHA_FILE"
 say "plugin -> $DST"
 
 hermes plugins enable vipa >/dev/null 2>&1 || say "hermes plugins enable vipa failed (run it by hand)"
@@ -104,32 +102,14 @@ else:
 PY
 
 # ---------------------------------------------------------------- 4. gateway
-# Restarting from inside a gateway session kills that session, so the restart is
-# detached and delayed, and the result goes to a file.
-REPORT="${VIPA_REPORT:-/tmp/vipa-install.txt}"
+# Restarting is NOT done here on purpose: Hermes refuses to run, from inside a gateway
+# session, any command that could stop the gateway — and that judgement covers this script
+# as a whole if the words appear in it. So the restart lives in ./restart.sh, one line,
+# which a human or an out-of-process shell runs.
 FRESH=1
 if vipa_up "$PORT" && [ "$NEW_SHA" = "$OLD_SHA" ]; then
   FRESH=0
   say "vipa already answers on $PORT (same code, no restart)"
-else
-  LABEL="ai.hermes.gateway"
-  if [ -f "$HOME/Library/LaunchAgents/$LABEL.plist" ]; then
-    RESTART="launchctl kickstart -k gui/$(id -u)/$LABEL"
-  else
-    RESTART="hermes gateway stop; hermes gateway start"
-  fi
-  rm -f "$REPORT"
-  nohup bash -c "
-    sleep 15
-    $RESTART >/dev/null 2>&1 || { hermes gateway stop >/dev/null 2>&1; hermes gateway start >/dev/null 2>&1; }
-    for _ in \$(seq 1 40); do
-      curl -fsS -m 2 http://127.0.0.1:$PORT/api/health 2>/dev/null | grep -q '\"ok\": true' \
-        && { echo ok > '$REPORT'; exit 0; }
-      sleep 1
-    done
-    { echo fail; tail -8 '$H/logs/gateway.log' 2>/dev/null; } > '$REPORT'
-  " >/dev/null 2>&1 &
-  say "gateway restarting in 15s (result: $REPORT)"
 fi
 
 # ---------------------------------------------------------------- 5. url
@@ -218,4 +198,8 @@ if [ "${VIPA_NGROK:-0}" = "1" ] && [ -z "${NGTUNNEL:-}" ]; then
   printf '  NEED: verify the ngrok account email → https://dashboard.ngrok.com/user/settings → run VIPA_NGROK=1 ./install.sh again\n'
 fi
 
+if [ "$FRESH" = "1" ]; then
+  printf '  NEED: run ./restart.sh from a shell outside this agent session. The plugin only loads\n'
+  printf '        when the gateway starts, and Hermes refuses that from inside a session.\n'
+fi
 printf '\n  health: curl http://127.0.0.1:%s/api/health\n\n' "$PORT"

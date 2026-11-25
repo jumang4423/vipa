@@ -26,10 +26,18 @@ cd ~/vipa && VIPA_NGROK=1 ./install.sh
 `VIPA_NGROK=1` is optional. Without it the phone talks to the Mac's LAN address, which is
 all you need at home.
 
-The installer returns immediately. It schedules a gateway restart **15 seconds later**
-(detached) so that a caller running inside a gateway session can finish its turn; the
-result lands in `/tmp/vipa-install.txt`. Do **not** run `hermes gateway restart` yourself
-from inside a session — Hermes blocks it, and it would kill the session mid-turn.
+`install.sh` never restarts anything. When the plugin code changed it prints
+`NEED: run ./restart.sh`, and that one must run outside the agent session: Hermes refuses,
+from inside a gateway session, any command that could stop the gateway — and it judges a
+whole script by what it contains. Keeping the restart in a separate file is what lets the
+agent run `install.sh` at all.
+
+```bash
+./restart.sh            # 2s later, detached; result in /tmp/vipa-restart.txt
+```
+
+It restarts through launchd when the plist exists, else through the CLI, then waits for
+`/api/health` and writes `ok` or the tail of the gateway log.
 
 A restart only happens when the plugin code actually changed (`.vipa-adapter.sha`);
 re-running the installer is otherwise a no-op for the gateway.

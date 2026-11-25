@@ -32,6 +32,19 @@ flowchart LR
 One process, no second server: the plugin inside Hermes is the only door. The phone has no
 push channel (no GMS), so it asks for new messages every five seconds.
 
+## Two screens
+
+The phone has two keys worth naming: **Reply** (top left) records, **Switch** (right) turns
+the page.
+
+- **the thread** — what the agent decided to send. Empty means empty: it says "No messages"
+  and nothing else.
+- **the day** — the routine from `hermes-plugin/vipa/schedule.json`: the item you are in,
+  a NOW chip on it, a dot on the axis where the clock is, scrolling like the thread.
+
+The same routine is part of the agent's instructions, so "what's next?" is answered from
+the same list you are looking at. The agent is told it is not a schedule to manage.
+
 ## Requirements
 
 - **Hermes** on a machine that stays on

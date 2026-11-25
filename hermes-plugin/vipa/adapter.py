@@ -292,7 +292,7 @@ class VipaAdapter(BasePlatformAdapter):
         self._q = None            # asyncio.Queue, created inside the loop
         self._loop = None
         self._worker = None
-        self._reset_task = None
+        self._session_day = None
         self._server = None
         self._thread = None
 
@@ -315,20 +315,16 @@ class VipaAdapter(BasePlatformAdapter):
                                         name="vipa-http", daemon=True)
         self._thread.start()
         self._worker = asyncio.ensure_future(self._drain())
-        if (extra_or_secret(getattr(self.config, "extra", {}) or {}, "daily_reset", "VIPA_DAILY_RESET") or "1") not in ("0", "false", "no"):
-            self._reset_task = asyncio.ensure_future(self._daily_reset())
+        self._session_day = self._cycle_day()
         self._mark_connected()
         log.info("vipa: listening on %s", self.listen)
         return True
 
     async def disconnect(self) -> None:
-        if self._reset_task is not None:
-            self._reset_task.cancel()
-            self._reset_task = None
         if self._worker is not None:
             self._worker.cancel()
             self._worker = None
-        self._reset_task = None
+        self._session_day = None
         if self._server is not None:
             self._server.shutdown()
             self._server.server_close()
@@ -347,23 +343,25 @@ class VipaAdapter(BasePlatformAdapter):
             self._reset()
         log.info("vipa: new session chat_id=%s (cleared=%s)", self.chat_id, clear)
 
-    async def _daily_reset(self):
-        """Rotate the session once a day, so a long chat never becomes the phone's problem."""
+    def _cycle_day(self):
+        """Which 'day' the session belongs to, given VIPA_RESET_HOUR (default midnight)."""
         import datetime
-        hour = int(extra_or_secret(getattr(self.config, "extra", {}) or {}, "reset_hour", "VIPA_RESET_HOUR") or 0)
-        while True:
-            now = datetime.datetime.now()
-            nxt = now.replace(hour=hour, minute=0, second=0, microsecond=0)
-            if nxt <= now:
-                nxt += datetime.timedelta(days=1)
-            delay = max(5.0, (nxt - now).total_seconds())
-            # test hook: VIPA_RESET_SECS=5 rotates every 5s instead of at the clock time
-            override = extra_or_secret(getattr(self.config, "extra", {}) or {}, "reset_secs", "VIPA_RESET_SECS")
-            if override:
-                delay = max(3.0, float(override))
-            if not override:
-                log.info("vipa: session reset scheduled for %s", nxt.strftime("%Y-%m-%d %H:%M"))
-            await asyncio.sleep(delay)
+        hour = int(extra_or_secret(getattr(self.config, "extra", {}) or {}, "reset_hour",
+                                   "VIPA_RESET_HOUR") or 0)
+        now = datetime.datetime.now()
+        return (now - datetime.timedelta(hours=hour)).date()
+
+    def _rotate_if_new_day(self):
+        """Called on every inbound message: cheap, and survives sleep and restarts."""
+        if (extra_or_secret(getattr(self.config, "extra", {}) or {}, "daily_reset",
+                            "VIPA_DAILY_RESET") or "1") in ("0", "false", "no"):
+            return
+        today = self._cycle_day()
+        if self._session_day is None:
+            self._session_day = today
+            return
+        if today != self._session_day:
+            self._session_day = today
             self._rotate_session()
 
     async def _drain(self):
@@ -420,6 +418,10 @@ class VipaAdapter(BasePlatformAdapter):
 
     def _deliver(self, text, user="vipa"):
         """Queue one message. The HTTP response never waits for the agent."""
+        try:
+            self._rotate_if_new_day()
+        except Exception as e:
+            log.warning("vipa: daily rotation check failed: %s", e)
         self._push("user", text)
         if self.inject_rules and not text.startswith("/"):
             # Slash commands (/new, /reset, ...) must reach the gateway untouched.

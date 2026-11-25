@@ -195,7 +195,8 @@ function poll() {
     try {
       var d = JSON.parse(x.responseText);
       var ms = d.messages || [];
-      if (d.last !== undefined && d.last < since) { since = 0; return; }  // gateway restarted
+      // the box was emptied or the gateway restarted: start over, cleanly
+      if (d.last !== undefined && d.last < since) { location.reload(); return; }
       for (var i = 0; i < ms.length; i++) {
         addBubble(ms[i].role, ms[i].text);
         since = ms[i].seq;

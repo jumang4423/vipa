@@ -105,6 +105,7 @@ class VipaAdapter(BasePlatformAdapter):
         self._q = None            # asyncio.Queue, created inside the loop
         self._loop = None
         self._worker = None
+        self._reset_task = None
         self._server = None
         self._thread = None
 
@@ -127,19 +128,49 @@ class VipaAdapter(BasePlatformAdapter):
                                         name="vipa-http", daemon=True)
         self._thread.start()
         self._worker = asyncio.ensure_future(self._drain())
+        if (extra_or_secret(getattr(self.config, "extra", {}) or {}, "daily_reset", "VIPA_DAILY_RESET") or "1") not in ("0", "false", "no"):
+            self._reset_task = asyncio.ensure_future(self._daily_reset())
         self._mark_connected()
         log.info("vipa: listening on %s", self.listen)
         return True
 
     async def disconnect(self) -> None:
+        if self._reset_task is not None:
+            self._reset_task.cancel()
+            self._reset_task = None
         if self._worker is not None:
             self._worker.cancel()
             self._worker = None
+        self._reset_task = None
         if self._server is not None:
             self._server.shutdown()
             self._server.server_close()
             self._server = None
         self._mark_disconnected()
+
+    def _rotate_session(self):
+        """Start a fresh session: the prompt is rebuilt from the current rules."""
+        base = self.chat_id.split("-")[0] or "vipa"
+        self.chat_id = "%s-%d" % (base, int(time.time()))
+        self._reset()
+        log.info("vipa: new session chat_id=%s", self.chat_id)
+
+    async def _daily_reset(self):
+        """Rotate the session once a day, so a long chat never becomes the phone's problem."""
+        import datetime
+        hour = int(extra_or_secret(getattr(self.config, "extra", {}) or {}, "reset_hour", "VIPA_RESET_HOUR") or 0)
+        while True:
+            now = datetime.datetime.now()
+            nxt = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+            if nxt <= now:
+                nxt += datetime.timedelta(days=1)
+            delay = max(5.0, (nxt - now).total_seconds())
+            # test hook: VIPA_RESET_SECS=5 rotates every 5s instead of at the clock time
+            override = extra_or_secret(getattr(self.config, "extra", {}) or {}, "reset_secs", "VIPA_RESET_SECS")
+            if override:
+                delay = max(3.0, float(override))
+            await asyncio.sleep(delay)
+            self._rotate_session()
 
     async def _drain(self):
         """An agent turn takes minutes. Acknowledge fast, run turns in order here."""

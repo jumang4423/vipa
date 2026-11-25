@@ -58,6 +58,24 @@ Relay those lines only. Do not summarise diffs, do not list what was copied.
 Inbound is acknowledged with `202` immediately; turns run on a serial queue. There is no
 push channel: the phone has no GMS.
 
+## Why the rules ride on the message
+
+On Hermes 0.23.4 a plugin platform's `platform_hint` did not reach a gateway session's prompt.
+Checked in this order: the registry entry carries the text (2022 chars);
+`agent.platform_hints.vipa.replace` resolves to it; `SOUL.md` is loaded per the code path — and
+still the agent answered "there is no such list in my instructions". The session row in
+`state.db` keeps only a prompt hash, so there is nothing to inspect after the fact.
+
+So `adapter.py` prepends a short `[vipa] ...` block to every inbound message. It is ugly, and it
+is the only thing that held. Turn it off when the upstream wiring starts working:
+
+```
+VIPA_INJECT_RULES=0
+```
+
+`philosophy.md` and `criteria.md` stay the source of truth. `install.sh` copies their text into
+`agent.platform_hints.vipa.replace`, and the shorter per-message block is the same rules condensed.
+
 ## Settings (`~/.hermes/.env`)
 
 ```

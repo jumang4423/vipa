@@ -191,10 +191,16 @@ class VipaAdapter(BasePlatformAdapter):
 
     # ---------------------------------------------------------------- outbound
 
+    # Notices the gateway emits about itself. They are not for the phone.
+    NOISE = ("Self-improvement review", "Gateway online", "Memory updated")
+
     async def send(self, chat_id, content, reply_to=None, metadata=None):
         text = (content or "").strip()
         if not text:
             return SendResult(success=False)
+        if any(n in text for n in self.NOISE):
+            log.info("vipa: dropped system notice: %s", text[:60])
+            return SendResult(success=True, message_id="dropped")
         return SendResult(success=True, message_id=str(self._push("assistant", text)))
 
     async def send_typing(self, chat_id):

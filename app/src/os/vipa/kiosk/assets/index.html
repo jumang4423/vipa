@@ -94,24 +94,27 @@
 
   /* schedule screen: the day, nothing else */
   .sched{display:none;position:absolute;left:0;right:0;top:49px;bottom:64px;
-    overflow-y:auto;padding:14px 14px 8px;background:#000;line-height:1.25;
+    overflow-y:auto;padding:8px 10px 6px;background:#000;line-height:1.2;
     font-family:-apple-system,"Hiragino Sans",sans-serif}
   .sched.on{display:block}
-  .sched .now{font-size:26px;line-height:1.2;font-weight:600;color:#f2f2f2;
+  .sched .now{font-size:31px;line-height:1.2;font-weight:600;color:#f2f2f2;
     text-align:center;word-wrap:break-word}
-  .sched .nowat{font-size:20px;color:#c9c9c9;text-align:center;margin-top:2px}
-  .sched .date{font-size:12px;color:#9a9a9a;text-align:center;margin:10px 0 4px}
-  .sched .axis{position:relative;height:24px;margin:2px 0 0}
+  .sched .nowat{font-size:24px;color:#c9c9c9;text-align:center;margin-top:2px}
+  .sched .date{font-size:13px;color:#9a9a9a;text-align:center;margin:4px 0 2px}
+  .sched .axis{position:relative;height:22px;margin:0}
   .sched .axis .line{position:absolute;left:0;right:0;top:11px;height:2px;background:#3a3a3a}
   .sched .axis .dot{position:absolute;top:7px;width:10px;height:10px;margin-left:-5px;
     border-radius:50%;background:#fff;border:2px solid #000}
   .sched .ticks{position:relative;height:14px;font-size:10px;color:#7d7d7d}
   .sched .ticks span{position:absolute;top:0;white-space:nowrap}
-  .sched .it{display:-webkit-box;display:flex;padding:5px 0;border-top:1px solid #171717}
-  .sched .it .t{width:44px;font-size:10px;color:#7d7d7d;padding-top:2px}
-  .sched .it .b{-webkit-box-flex:1;flex:1}
-  .sched .it .ti{font-size:13px;line-height:1.25;color:#e6e6e6}
-  .sched .it .no{font-size:11px;color:#8a8a8a;margin-top:2px}
+  .sched .it{display:-webkit-box;display:flex;padding:3px 0;border-top:1px solid #171717}
+  .sched .it .t{width:46px;font-size:11px;color:#7d7d7d;padding-top:3px}
+  .sched .it .sb{-webkit-box-flex:1;flex:1}
+  .sched .it .ti{font-size:17px;line-height:1.2;color:#e6e6e6}
+  .sched .it .ti .chip{display:inline-block;margin-left:8px;padding:3px 9px;
+    font-size:13px;font-weight:600;letter-spacing:.1em;vertical-align:middle;
+    color:#0d0d0d;background:#f2f2f2;border-radius:5px}
+  .sched .it .no{font-size:12px;color:#8a8a8a;margin-top:1px}
   .sched .it.cur .ti{color:#fff}
   .sched .it.cur .t{color:#d0d0d0}
 
@@ -379,8 +382,13 @@ function renderSchedule() {
     var el = document.createElement('div');
     el.className = 'it' + (i === cur ? ' cur' : '');
     var t = document.createElement('div'); t.className = 't'; t.textContent = items[i].at;
-    var b = document.createElement('div'); b.className = 'b';
-    var ti = document.createElement('div'); ti.className = 'ti'; ti.textContent = items[i].title;
+    var b = document.createElement('div'); b.className = 'sb';
+    var ti = document.createElement('div'); ti.className = 'ti';
+    ti.appendChild(document.createTextNode(items[i].title));
+    if (i === cur) {
+      var chip = document.createElement('span'); chip.className = 'chip'; chip.textContent = 'NOW';
+      ti.appendChild(chip);
+    }
     b.appendChild(ti);
     if (items[i].note) {
       var no = document.createElement('div'); no.className = 'no'; no.textContent = items[i].note;

@@ -451,9 +451,30 @@ def _read(name):
         return ""
 
 
+def _routine():
+    """The user's day, as the phone shows it, for the agent to reason with."""
+    try:
+        data = json.loads(_read("schedule.json") or "{}")
+    except Exception:
+        return ""
+    items = [i for i in data.get("items", []) if i.get("at") and i.get("title")]
+    if not items:
+        return ""
+    items.sort(key=lambda i: i["at"])
+    lines = ["## The user's routine (fixed times, every day)", ""]
+    for i in items:
+        line = "%s %s" % (i["at"], i["title"])
+        if i.get("note"):
+            line += " — " + i["note"]
+        lines.append("- " + line)
+    lines += ["", "Use it when asked what the user is doing now, or what comes next. "
+                  "It is not a schedule to manage: never create, move or cancel anything in it."]
+    return "\n".join(lines)
+
+
 def platform_hint() -> str:
-    """philosophy.md and criteria.md ship with the plugin and enter every vipa turn."""
-    parts = [_read("philosophy.md"), _read("criteria.md")]
+    """philosophy.md, criteria.md and the routine enter every vipa turn."""
+    parts = [_read("philosophy.md"), _read("criteria.md"), _routine()]
     text = "\n\n".join(p for p in parts if p)
     return text or ("vipa is a tiny flip phone (KYF39): 480x854, no touchscreen, four keys. "
                     "Answer in one short line. No emoji. Only what is actually owed today.")
@@ -463,7 +484,7 @@ def _rules_id():
     """Short digest of philosophy.md + criteria.md, stable across restarts."""
     import hashlib
     h = hashlib.sha256()
-    for name in ("philosophy.md", "criteria.md"):
+    for name in ("philosophy.md", "criteria.md", "schedule.json"):
         try:
             with open(os.path.join(HERE, name), "rb") as f:
                 h.update(f.read())

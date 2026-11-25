@@ -71,6 +71,18 @@ Relay those lines only. Do not summarise diffs, do not list what was copied.
 Inbound is acknowledged with `202` immediately; turns run on a serial queue. There is no
 push channel: the phone has no GMS.
 
+## The routine screen
+
+`hermes-plugin/vipa/schedule.json` is the day shown by the right soft key (Switch). Edit it and
+restart the gateway; nothing is generated.
+
+```json
+{"items": [{"at": "06:00", "title": "Wake up", "note": "Anapana in bed, 5 min"}]}
+```
+
+The screen shows the item you are in, a NOW chip on it, a "now" dot on the axis, and scrolls
+like the message screen. There is no footer text.
+
 ## How the rules reach the agent
 
 `philosophy.md` and `criteria.md` are read by `register()` and handed to Hermes as

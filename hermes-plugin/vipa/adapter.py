@@ -9,6 +9,7 @@ UI も別サーバーも持たない。画面は APK の中。
       POST /api/voice        声（Groq で文字起こし）→ エージェント
       POST /api/in           文字 → エージェント
       GET  /api/out?since=N  5秒ごとに返信を取る
+      POST /api/reset        箱を空にする
       GET  /api/health
 
 環境変数（config.yaml の gateway.platforms.vipa.extra でも可）:
@@ -273,6 +274,13 @@ class VipaAdapter(BasePlatformAdapter):
                         return
                     adapter._deliver(text)
                     self._send(202, {"ok": True})
+                    return
+
+                if path == "/api/reset":
+                    with adapter._lock:
+                        del adapter._out[:]
+                        adapter._seq = 0
+                    self._send(200, {"ok": True})
                     return
 
                 if path == "/api/voice":

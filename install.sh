@@ -98,20 +98,38 @@ nohup bash -c "
 " >/dev/null 2>&1 &
 say "gateway を再起動中（${HOW}、結果は20〜40秒後に ${REPORT}）"
 
+# 4b. この端末を home channel にする（初回の案内を出させない）＋箱を空にする
+curl -fsS -m 5 -X POST "http://127.0.0.1:${PORT}/api/in" \
+  -H 'Content-Type: application/json' -d '{"text":"/sethome"}' >/dev/null 2>&1 || true
+sleep 8
+curl -fsS -m 5 -X POST "http://127.0.0.1:${PORT}/api/reset" >/dev/null 2>&1 || true
+say "home channel を設定し、画面を空にした"
+
 # ---------------------------------------------------------------- 5. URL
 URL="http://$(ipconfig getifaddr en0 2>/dev/null || echo 127.0.0.1):$PORT"
+NGTUNNEL=""
 if [ "${VIPA_NGROK:-0}" = "1" ]; then
-  command -v ngrok >/dev/null 2>&1 || die "ngrok が無い"
-  pkill -f "ngrok http .*$PORT" 2>/dev/null || true
-  nohup ngrok http "$PORT" >/dev/null 2>&1 &
-  for _ in $(seq 1 20); do
-    U=$(curl -s -m 2 http://127.0.0.1:4040/api/tunnels 2>/dev/null \
-        | python3 -c 'import json,sys; t=json.load(sys.stdin)["tunnels"]; print([x["public_url"] for x in t if x["public_url"].startswith("https")][0])' 2>/dev/null || true)
-    [ -n "${U:-}" ] && { URL="$U"; break; }
-    sleep 1
-  done
-  [ "$URL" != "${URL#https://}" ] || die "ngrok の URL が取れない"
-  say "ngrok -> $URL"
+  if ! command -v ngrok >/dev/null 2>&1; then
+    say "ngrok が無い。LAN の URL のまま進む"
+  else
+    NGLOG="${TMPDIR:-/tmp}/vipa-ngrok.log"
+    pkill -f "ngrok http .*$PORT" 2>/dev/null || true
+    nohup ngrok http "$PORT" --log=stdout > "$NGLOG" 2>&1 &
+    for _ in $(seq 1 20); do
+      NGTUNNEL=$(curl -s -m 2 http://127.0.0.1:4040/api/tunnels 2>/dev/null \
+          | python3 -c 'import json,sys; t=json.load(sys.stdin)["tunnels"]; print([x["public_url"] for x in t if x["public_url"].startswith("https")][0])' 2>/dev/null || true)
+      [ -n "${NGTUNNEL:-}" ] && break
+      sleep 1
+    done
+    if [ -n "${NGTUNNEL:-}" ]; then
+      URL="$NGTUNNEL"
+      say "ngrok -> $URL"
+    else
+      REASON=$(grep -o 'The account.*\|ERR_NGROK_[0-9]*' "$NGLOG" 2>/dev/null | head -1 | cut -c1-160)
+      say "ngrok が張れない: ${REASON:-原因不明（$NGLOG を見る）}"
+      say "LAN の URL のまま進む: $URL"
+    fi
+  fi
 fi
 
 # ---------------------------------------------------------------- 6. device

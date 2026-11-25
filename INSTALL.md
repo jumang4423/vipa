@@ -101,8 +101,14 @@ curl -s -X POST http://127.0.0.1:8099/api/day -H 'Content-Type: application/json
   -d '{"kind":"meal","kcal":560,"text":"rice 0.5 go, tofu, miso soup"}'
 ```
 
+Two tools do this without curl:
+
+- `vipa_log(kind, text?, kcal?, kg?, ts?)` — append one entry
+- `vipa_day(date?)` — read a day back (default today)
+
 A body record is not a scoreboard: `criteria.md` allows numbers here because they are the
-user's own body reporting itself, not a comparison with anyone.
+user's own body reporting itself, not a comparison with anyone. The phone shows **today
+only** — history is for the agent to answer from, never for browsing.
 
 ## How the rules reach the agent
 

@@ -179,6 +179,32 @@ def _tool_log(args, **_):
     return "logged " + " ".join(bits) + (" — " + entry["text"] if entry.get("text") else "")
 
 
+def _tool_day(args, **_):
+    """vipa_day: read what the body recorded, today or any day."""
+    import datetime
+    day = str(args.get("date") or "").strip() or None
+    data = read_day(day)
+    entries = data["entries"]
+    if not entries:
+        return "%s: nothing recorded." % data["date"]
+    kcal = sum(e.get("kcal", 0) for e in entries)
+    kgs = [e["kg"] for e in entries if e.get("kind") == "weight" and e.get("kg")]
+    lines = ["%s — %d entries, %d kcal%s" % (
+        data["date"], len(entries), kcal,
+        (", weight %s kg" % kgs[-1]) if kgs else "")]
+    for e in entries:
+        bits = [e.get("ts", ""), e.get("kind", "")]
+        if e.get("kcal"):
+            bits.append("%d kcal" % e["kcal"])
+        if e.get("kg"):
+            bits.append("%s kg" % e["kg"])
+        line = " ".join(bits)
+        if e.get("text"):
+            line += ": " + e["text"]
+        lines.append("- " + line)
+    return "\n".join(lines)
+
+
 class VipaAdapter(BasePlatformAdapter):
     def __init__(self, config: PlatformConfig):
         super().__init__(config, Platform("vipa"))
@@ -614,7 +640,8 @@ def _rules_id():
     """Short digest of philosophy.md + criteria.md, stable across restarts."""
     import hashlib
     h = hashlib.sha256()
-    for name in ("philosophy.md", "criteria.md", "schedule.json"):
+    # the adapter too: a new tool or behaviour needs a session that knows about it
+    for name in ("philosophy.md", "criteria.md", "schedule.json", "adapter.py"):
         try:
             with open(os.path.join(HERE, name), "rb") as f:
                 h.update(f.read())
@@ -700,6 +727,25 @@ def register(ctx):
         },
         handler=_tool_log,
         emoji="\U0001f9b7",
+    )
+
+    ctx.register_tool(
+        name="vipa_day",
+        toolset="hermes-vipa",
+        schema={
+            "name": "vipa_day",
+            "description": ("Read what the user's body recorded on a day: weight, meals with kcal, "
+                            "alcohol, mood, sleep, steps. Use it whenever the user asks about "
+                            "yesterday or any past day, or wants a summary over time."),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {"type": "string", "description": "YYYY-MM-DD; omit for today"},
+                },
+            },
+        },
+        handler=_tool_day,
+        emoji="\U0001f4c4",
     )
     # Cron: `deliver=vipa` resolves the home channel from this env var.
     kwargs["cron_deliver_env_var"] = "VIPA_HOME_CHANNEL"

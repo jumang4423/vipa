@@ -2,6 +2,12 @@
 
 Connects the KYF39 phone to Hermes. **No UI, no second server, no dependencies.**
 
+## Philosophy
+
+`philosophy.md` sits next to `adapter.py` and is injected as `platform_hint`, so it is part
+of the system prompt of every turn on this platform. Edit that file to change how the agent
+speaks to the phone — not the config.
+
 ## Endpoints
 
 | | |

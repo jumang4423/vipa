@@ -304,6 +304,19 @@ class VipaAdapter(BasePlatformAdapter):
         return Handler
 
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def platform_hint() -> str:
+    """The philosophy ships with the plugin and is injected into every vipa turn."""
+    try:
+        with open(os.path.join(HERE, "philosophy.md"), encoding="utf-8") as f:
+            return f.read().strip()
+    except Exception:
+        return ("vipaOS is a tiny flip phone (KYF39): 480x854, no touchscreen, four keys. "
+                "Answer in one short line. No emoji. Only what is actually owed today.")
+
+
 def check_requirements() -> bool:
     return True
 
@@ -316,10 +329,7 @@ def register(ctx):
         check_fn=check_requirements,
         required_env=[],
         max_message_length=2000,
-        platform_hint=(
-            "vipaOS is a tiny flip phone (KYF39): 480x854, no touchscreen, four keys. "
-            "Answer in one short line by default. No emoji. Only answer when spoken to."
-        ),
+        platform_hint=platform_hint(),
     )
     # One phone, at home. No pairing prompt.
     kwargs["allowed_users_env"] = "VIPA_ALLOWED_USERS"

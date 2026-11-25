@@ -3,6 +3,9 @@
 A flip phone that carries nothing — no feed, no shop, no count — and an agent at home that
 does the reading for you.
 
+The phone is a KYF39 because it can do very little and its battery lasts about ten days.
+Nothing on it can ask to be looked at.
+
 The bound is not on what the phone can do. It is on what reaches it, and on how slowly it
 can be read. One door, one 480×854 screen, four keys. Nothing here is a moral test.
 

@@ -141,6 +141,43 @@ else:
     print("  config: platform_hints.vipa.replace written")
 PY2
 
+# 3c. the same text in SOUL.md as well. The platform hint is not always wired into the
+# prompt of a gateway session, and this one has to hold: it is the agent's identity.
+SOUL="$H/SOUL.md"
+touch "$SOUL"
+python3 - "$SOUL" "$DST" <<'PY3'
+import os, sys
+
+soul, dst = sys.argv[1], sys.argv[2]
+BEGIN, END = "<!-- vipa:begin -->", "<!-- vipa:end -->"
+
+
+def read(name):
+    try:
+        with open(os.path.join(dst, name), encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+text = "\n\n".join(p for p in (read("philosophy.md"), read("criteria.md")) if p)
+if not text:
+    sys.exit(0)
+
+block = BEGIN + "\n" + text + "\n" + END + "\n"
+body = open(soul, encoding="utf-8").read()
+
+if BEGIN in body and END in body:
+    head, _, rest = body.partition(BEGIN)
+    _, _, tail = rest.partition(END)
+    body = head.rstrip("\n") + "\n\n" + block + tail.lstrip("\n")
+else:
+    body = body.rstrip("\n") + "\n\n" + block
+
+open(soul, "w", encoding="utf-8").write(body)
+print("  soul: vipa block written (%d chars)" % len(body))
+PY3
+
 # ---------------------------------------------------------------- 4. gateway
 # Restarting from inside a gateway session kills that session, so the restart is
 # detached and delayed, and the result goes to a file.

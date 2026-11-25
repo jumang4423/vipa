@@ -139,7 +139,7 @@ Only needed if you change `app/`. The prebuilt `app/vipa.apk` is committed.
 
 ```bash
 SDK="$HOME/Library/Android/sdk"; BT="$SDK/build-tools/34.0.0"; AJ="$SDK/platforms/android-34/android.jar"
-P=app; KS="$HOME/vipa/debug.keystore"
+P=app; KS="$HOME/vipa/debug.keystore"   # make one: keytool -genkeypair -keystore $KS -alias androiddebugkey -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
 javac --release 8 -cp "$AJ" -d "$P/build/classes" $(find "$P/src" -name '*.java')
 "$BT/d8" --min-api 21 --lib "$AJ" --output "$P/build/dex" $(find "$P/build/classes" -name '*.class')
 "$BT/aapt2" link -o "$P/build/base.apk" -I "$AJ" --manifest "$P/AndroidManifest.xml" \
@@ -151,6 +151,10 @@ cp "$P/build/base.apk" "$P/build/unsigned.apk"
   --out "$P/out/vipa.apk" "$P/build/aligned.apk"
 cp "$P/out/vipa.apk" app/vipa.apk
 ```
+
+The committed `app/vipa.apk` is signed with a throwaway debug key. Installing it is fine, but
+rebuilding with a different key means Android will refuse to update the installed app —
+uninstall the old one first (`adb uninstall os.vipa.kiosk`).
 
 ## Removing it
 

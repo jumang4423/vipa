@@ -2,6 +2,11 @@
 
 This is the vow. It decides what may reach the phone.
 
+It exists for one purpose: to keep the dynamics that collective fictions generate — rank,
+comparison, consensus pressure, the race for standing — away from a person who wants real
+sensation, plain ethics, peace and stability, and who owes society only the minimum of
+responsibility that is actually theirs.
+
 ## The one question
 
 Does this ask the user to **do something in the world** today — or does it ask them to

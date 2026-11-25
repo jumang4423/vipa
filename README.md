@@ -1,13 +1,26 @@
 # vipa
 
-A flip phone that carries nothing — no feed, no shop, no count — and an agent at home that
-does the reading for you.
+**vipa** is *vipassanā*, cut short. A flip phone that carries nothing — no feed, no shop, no
+count — and an agent at home that blocks the dynamics collective fictions generate and
+passes on only the minimum a life actually owes to society.
 
-The phone is a KYF39 because it can do very little and its battery lasts about ten days.
-Nothing on it can ask to be looked at.
+## Why
 
-The bound is not on what the phone can do. It is on what reaches it, and on how slowly it
-can be read. One door, one 480×854 screen, four keys. Nothing here is a moral test.
+Vipassanā is not a technique for feeling better. It is the practice of seeing what is
+actually there — the sensation before the story about it — so the story stops being mistaken
+for the world. Almost everything that reaches a phone is story: what a crowd finds
+interesting, what a screen wants you to compare, what a number says about your standing.
+None of it is sensation. All of it is a demand.
+
+This builds the opposite. The phone is a KYF39: it can do very little, its battery lasts
+about ten days, and nothing on it can ask to be looked at. The machine at home blocks rank,
+comparison, consensus pressure, the race for standing — without arguing with them — and lets
+through only what a life owes: a deadline, a person waiting for an answer, a commitment, a
+change that alters today's plan.
+
+It is for real sensation, plain ethics, peace and stability. Not productivity, not
+minimalism, not resistance — resistance stays in the same arena, and the point is to leave
+it.
 
 ## Requirements
 

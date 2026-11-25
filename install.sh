@@ -55,13 +55,31 @@ python3 - "$CFG" <<'PY'
 import re, sys
 p = sys.argv[1]
 s = open(p, encoding="utf-8").read()
+VIPA_BLOCK = (
+    "platforms:\n"
+    "  vipa:\n"
+    "    enabled: true\n"
+    "    gateway_restart_notification: false\n"
+    "    home_channel:\n"
+    "      platform: vipa\n"
+    "      chat_id: vipa\n"
+    "      name: vipaOS\n"
+    "      user_id: vipa\n"
+)
+
+
 def ensure_notice_off(text):
     # 「♻️ Gateway online」を端末に出さない
     if re.search(r'^    gateway_restart_notification: false', text, re.M):
         return text
     if re.search(r'^  vipa:[ \t]*\n    enabled: true[ \t]*$', text, re.M):
-        return re.sub(r'^(  vipa:[ \t]*\n    enabled: true[ \t]*)$',
+        text = re.sub(r'^(  vipa:[ \t]*\n    enabled: true[ \t]*)$',
                       r'\1\n    gateway_restart_notification: false', text, count=1, flags=re.M)
+    if not re.search(r'^      chat_id: vipa', text, re.M):
+        text = re.sub(r'^(  vipa:[ \t]*\n    enabled: true[ \t]*\n(?:    [a-z_]+: [^\n]*\n)*)',
+                      r'\1    home_channel:\n      platform: vipa\n      chat_id: vipa\n'
+                      r'      name: vipaOS\n      user_id: vipa\n',
+                      text, count=1, flags=re.M)
     return text
 
 if re.search(r'^[ \t]+vipa:[ \t]*$', s, re.M):
@@ -69,13 +87,13 @@ if re.search(r'^[ \t]+vipa:[ \t]*$', s, re.M):
     open(p, "w", encoding="utf-8").write(s)
     print("  config: vipa は設定済み")
 elif re.search(r'^platforms:[ \t]*$', s, re.M):
-    s = re.sub(r'^platforms:[ \t]*$', "platforms:\n  vipa:\n    enabled: true\n    gateway_restart_notification: false", s, count=1, flags=re.M)
+    s = re.sub(r'^platforms:[ \t]*$', VIPA_BLOCK, s, count=1, flags=re.M)
     open(p, "w", encoding="utf-8").write(s)
     print("  config: platforms の下に vipa を挿入")
 else:
     if not s.endswith("\n"):
         s += "\n"
-    s += "\nplatforms:\n  vipa:\n    enabled: true\n    gateway_restart_notification: false\n"
+    s += "\n" + VIPA_BLOCK + "\n"
     open(p, "w", encoding="utf-8").write(s)
     print("  config: platforms を追記")
 PY
@@ -104,7 +122,7 @@ if vipa_up "$PORT"; then
 else
 rm -f "$REPORT"
 nohup bash -c "
-  sleep 2
+  sleep 15
   $RESTART >/dev/null 2>&1 || { hermes gateway stop >/dev/null 2>&1; hermes gateway start >/dev/null 2>&1; }
   for _ in \$(seq 1 40); do
     curl -fsS -m 2 http://127.0.0.1:$PORT/api/health 2>/dev/null | grep -q '\"ok\": true' \
@@ -114,15 +132,6 @@ nohup bash -c "
   { echo fail; tail -8 '$H/logs/gateway.log' 2>/dev/null; } > '$REPORT'
 " >/dev/null 2>&1 &
 say "gateway を再起動中（${HOW}、結果は20〜40秒後に ${REPORT}）"
-fi
-
-# 4b. 初回だけ: home channel にして、画面を空にする
-if [ "$FRESH" = "1" ]; then
-  curl -fsS -m 5 -X POST "http://127.0.0.1:${PORT}/api/in" \
-    -H 'Content-Type: application/json' -d '{"text":"/sethome"}' >/dev/null 2>&1 || true
-  sleep 8
-  curl -fsS -m 5 -X POST "http://127.0.0.1:${PORT}/api/reset" >/dev/null 2>&1 || true
-  say "home channel を設定し、画面を空にした"
 fi
 
 # ---------------------------------------------------------------- 5. URL
@@ -185,18 +194,12 @@ else
 fi
 
 # ---------------------------------------------------------------- 7. 確認
+# 初回は再起動が15秒後に走るので、ここでは待たない（待つと実行元のセッションが落ちる）。
+# 15秒後の結果は REPORT に書かれる。
 if [ "$FRESH" = "0" ]; then
   say "server: http://127.0.0.1:${PORT} ok（そのまま）"
 else
-  for _ in $(seq 1 45); do [ -f "$REPORT" ] && break; sleep 1; done
-  if [ -f "$REPORT" ] && head -1 "$REPORT" | grep -q ok; then
-    say "server: http://127.0.0.1:${PORT} ok"
-  elif [ -f "$REPORT" ]; then
-    say "待受が開かなかった。$REPORT:"
-    sed 's/^/    /' "$REPORT" | tail -8
-  else
-    say "再起動の結果がまだ出ていない（$REPORT を後で見る）"
-  fi
+  say "15秒後に gateway が再起動し、$PORT が開く（結果は ${REPORT}）"
 fi
 
 printf '\n'

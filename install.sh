@@ -1,65 +1,102 @@
 #!/usr/bin/env bash
-# vipa installer。何度実行しても壊れない。
+# vipa installer — 単体で完結する。何度実行しても壊れない。
+#
+#   ./install.sh              LAN 内だけで使う
+#   VIPA_NGROK=1 ./install.sh 外からも使う（ngrok の tunnel を張って端末に書く）
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
 H="${HERMES_HOME:-$HOME/.hermes}"
+CFG="$H/config.yaml"
+ENV="$H/.env"
 SRC="$REPO/hermes-plugin/vipa"
 DST="$H/plugins/vipa"
-PORT="${VIPA_PORT:-8099}"
 
 say() { printf '  %s\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
+health() { curl -fsS -m 2 "http://127.0.0.1:$1/api/health" 2>/dev/null | grep -q '"ok": true'; }
+taken()  { lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | grep -q .; }
+
 command -v hermes >/dev/null 2>&1 || die "hermes が無い"
 [ -d "$H" ] || die "$H が無い"
 
-# 1. プラグイン
+# ---------------------------------------------------------------- 1. plugin
 mkdir -p "$H/plugins"
 rm -rf "$DST"
 cp -R "$SRC" "$DST"
 say "plugin -> $DST"
 
-# 2. 秘密（任意）
-if [ ! -f "$H/.env" ]; then
-  printf 'VIPA_LISTEN=0.0.0.0:%s\n' "$PORT" > "$H/.env"
-  chmod 600 "$H/.env"
-  say "created $H/.env"
-fi
+hermes plugins enable vipa >/dev/null 2>&1 || say "plugins enable 失敗（後で hermes plugins enable vipa）"
+say "plugin enabled"
 
-# 3. 有効化
-hermes plugins enable vipa >/dev/null 2>&1 || say "plugins enable: 失敗（手で hermes plugins enable vipa）"
-say "enabled"
+# ---------------------------------------------------------------- 2. port
+PORT=""
+for p in 8099 8098 8097 8096 8095; do
+  if ! taken "$p" || health "$p"; then PORT="$p"; break; fi
+done
+[ -n "$PORT" ] || die "空きポートが無い（8095-8099 が全部埋まっている）"
+[ "$PORT" = "8099" ] || say "8099 は他のプロセスが使用中 -> $PORT に逃がす"
 
-# 3b. platform を有効化（これが無いと待受が開かない）
-CFG="$H/config.yaml"
-BLOCK=$'platforms:\n  vipa:\n    enabled: true'
-if [ -f "$CFG" ] && grep -qE '^[[:space:]]*vipa:' "$CFG" && grep -qE '^platforms:' "$CFG"; then
-  say "config: vipa は設定済み"
-elif [ -f "$CFG" ] && grep -qE '^platforms:' "$CFG"; then
-  printf '\nconfig.yaml に platforms: が既にあります。この下に足してください:\n\n  vipa:\n    enabled: true\n\n' >&2
-  exit 1
+touch "$ENV"; chmod 600 "$ENV"
+if grep -q '^VIPA_LISTEN=' "$ENV"; then
+  sed -i.bak "s|^VIPA_LISTEN=.*|VIPA_LISTEN=0.0.0.0:$PORT|" "$ENV"; rm -f "$ENV.bak"
 else
-  printf '\n%s\n' "$BLOCK" >> "$CFG"
-  say "config: platforms.vipa.enabled を追記"
+  printf 'VIPA_LISTEN=0.0.0.0:%s\n' "$PORT" >> "$ENV"
+fi
+say "listen -> 0.0.0.0:$PORT"
+
+# ---------------------------------------------------------------- 3. config
+[ -f "$CFG" ] || die "$CFG が無い"
+cp "$CFG" "$CFG.bak.$(date +%s)"
+python3 - "$CFG" <<'PY'
+import re, sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+if re.search(r'^[ \t]+vipa:[ \t]*$', s, re.M):
+    print("  config: vipa は設定済み")
+elif re.search(r'^platforms:[ \t]*$', s, re.M):
+    s = re.sub(r'^platforms:[ \t]*$', "platforms:\n  vipa:\n    enabled: true", s, count=1, flags=re.M)
+    open(p, "w", encoding="utf-8").write(s)
+    print("  config: platforms の下に vipa を挿入")
+else:
+    if not s.endswith("\n"):
+        s += "\n"
+    s += "\nplatforms:\n  vipa:\n    enabled: true\n"
+    open(p, "w", encoding="utf-8").write(s)
+    print("  config: platforms を追記")
+PY
+
+# ---------------------------------------------------------------- 4. gateway
+hermes gateway stop  >/dev/null 2>&1 || true
+hermes gateway start >/dev/null 2>&1 || true
+for _ in $(seq 1 40); do health "$PORT" && break; sleep 1; done
+if ! health "$PORT"; then
+  say "待受が開かない。ログ末尾:"
+  tail -8 "$H/logs/gateway.log" 2>/dev/null | sed 's/^/    /' || true
+  die "$PORT/api/health が応答しない"
+fi
+say "server: http://127.0.0.1:$PORT ok"
+
+# ---------------------------------------------------------------- 5. URL
+URL="http://$(ipconfig getifaddr en0 2>/dev/null || echo 127.0.0.1):$PORT"
+if [ "${VIPA_NGROK:-0}" = "1" ]; then
+  command -v ngrok >/dev/null 2>&1 || die "ngrok が無い"
+  pkill -f "ngrok http .*$PORT" 2>/dev/null || true
+  nohup ngrok http "$PORT" >/dev/null 2>&1 &
+  for _ in $(seq 1 20); do
+    U=$(curl -s -m 2 http://127.0.0.1:4040/api/tunnels 2>/dev/null \
+        | python3 -c 'import json,sys; t=json.load(sys.stdin)["tunnels"]; print([x["public_url"] for x in t if x["public_url"].startswith("https")][0])' 2>/dev/null || true)
+    [ -n "${U:-}" ] && { URL="$U"; break; }
+    sleep 1
+  done
+  [ "$URL" != "${URL#https://}" ] || die "ngrok の URL が取れない"
+  say "ngrok -> $URL"
 fi
 
-hermes gateway restart >/dev/null 2>&1 || say "gateway restart: 失敗（手で hermes gateway restart）"
-say "gateway restarted"
-
-# 4. 待受
-up() { curl -fsS "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; }
-if ! up; then
-  nohup hermes gateway start >/dev/null 2>&1 &
-  for _ in $(seq 1 20); do up && break; sleep 1; done
-fi
-up || die "$PORT が応答しない。'hermes gateway status' と 'hermes gateway logs' を見る"
-say "server: $PORT ok"
-
-# 5. 端末（挿さっていれば）
+# ---------------------------------------------------------------- 6. device
 if command -v adb >/dev/null 2>&1 && adb devices | awk 'NR>1 && $2=="device"' | grep -q .; then
   adb install -r "$REPO/app/vipaos.apk" >/dev/null && say "APK を投入"
-  URL="${VIPA_URL:-http://$(ipconfig getifaddr en0 2>/dev/null || echo 127.0.0.1):$PORT}"
   printf '%s\n' "$URL" > /tmp/vipa.url
   adb push /tmp/vipa.url /sdcard/vipaos.url >/dev/null && say "接続先 -> $URL"
   adb shell am start -n os.vipa.kiosk/.MainActivity >/dev/null 2>&1 || true
@@ -67,4 +104,8 @@ else
   say "端末が挿さっていない（USB で挿して、もう一度実行）"
 fi
 
-say "完了"
+# ---------------------------------------------------------------- 7. 確認
+say "done"
+printf '\n  curl "http://127.0.0.1:%s/api/health"\n' "$PORT"
+printf '  curl -X POST "http://127.0.0.1:%s/api/in" -H "Content-Type: application/json" -d '"'"'{"text":"こんにちは"}'"'"'\n' "$PORT"
+printf '  curl "http://127.0.0.1:%s/api/out?since=0"\n\n' "$PORT"

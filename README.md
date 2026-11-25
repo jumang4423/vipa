@@ -14,44 +14,36 @@ KYF39（アプリ）  ⇄  Hermes ＋ vipa plugin（1プロセス）
 Hermes にこう言う。
 
 ```
-https://github.com/jumang4423/vipa を読んで、入れて
+https://github.com/jumang4423/vipa を読んで、install.sh を最後まで実行して。途中で止まったら理由を報告して。
 ```
 
-手でやるなら、この4つ。
+手でやるなら、これだけ。
 
 ```bash
 git clone https://github.com/jumang4423/vipa.git && cd vipa
-./install.sh
+./install.sh                 # 家の中だけで使う
+VIPA_NGROK=1 ./install.sh    # 外からも使う
 ```
 
-`install.sh` の中身はこれだけ。順に実行される。
+`install.sh` は単体で完結する。順にこれをやる。
 
 1. `hermes-plugin/vipa` を `~/.hermes/plugins/` に置く
 2. `hermes plugins enable vipa`
-3. `~/.hermes/config.yaml` に有効化の1ブロックを追記する（下記）
-4. `hermes gateway restart`
-
-```yaml
-platforms:
-  vipa:
-    enabled: true
-```
-
-`platforms:` が既に config.yaml にある人は、その下に `vipa:` を足す（`install.sh` は追記せず、そう表示して止まる）。
-
-`8099` が他の用途で埋まっている場合は、`~/.hermes/.env` に逃がす。
-
-```
-VIPA_LISTEN=0.0.0.0:8098
-```
+3. `config.yaml` に `platforms.vipa.enabled` を入れる（既にあれば触らない／必ずバックアップを取る）
+4. `8099` が他プロセスに使われていたら `8098` に逃がす（`~/.hermes/.env` の `VIPA_LISTEN`）
+5. `gateway stop` → `start` して、`/api/health` が返るまで最大40秒待つ。返らなければログ末尾を出して止まる
+6. 端末が USB で挿さっていれば、APK を入れて接続先を書いて起動
+7. `VIPA_NGROK=1` なら ngrok を張り、**その URL** を端末に書く
 
 確認:
 
 ```bash
-curl http://127.0.0.1:8099/api/health   # {"ok":true,...}
+curl http://127.0.0.1:8099/api/health    # 逃がした場合は 8098
 ```
 
 ## 端末
+
+通常は `install.sh` がやる。手でやるなら:
 
 ```bash
 adb install -r app/vipaos.apk

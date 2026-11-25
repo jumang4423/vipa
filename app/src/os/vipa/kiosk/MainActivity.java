@@ -47,7 +47,7 @@ public class MainActivity extends Activity {
         super.onCreate(b);
 
         SERVER = resolveServer();
-        home = SERVER + "/";
+        home = assetHome();
 
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
@@ -66,6 +66,9 @@ public class MainActivity extends Activity {
         s.setTextZoom(100);
         s.setDefaultTextEncodingName("utf-8");
         s.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        s.setAllowFileAccess(true);
+        s.setAllowUniversalAccessFromFileURLs(true);
+        s.setDomStorageEnabled(true);
 
         web.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -78,7 +81,8 @@ public class MainActivity extends Activity {
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView v, String url) {
-                return url == null || !url.startsWith(SERVER);
+                if (url == null) return true;
+                return !(url.startsWith(SERVER) || url.startsWith("file://"));
             }
 
             @Override
@@ -231,6 +235,16 @@ public class MainActivity extends Activity {
     }
 
     // ------------------------------------------------------------ keys
+
+    /** 画面は APK の中。接続先だけ query で渡す。 */
+    private String assetHome() {
+        try {
+            return "file:///android_asset/index.html?u="
+                    + java.net.URLEncoder.encode(SERVER, "UTF-8");
+        } catch (Throwable t) {
+            return "file:///android_asset/index.html";
+        }
+    }
 
     /** /sdcard/vipaos.url があればそれを使う。無ければ既定。 */
     private String resolveServer() {

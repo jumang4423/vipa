@@ -1,32 +1,44 @@
-# vipa plugin for Hermes
+# vipa plugin
 
-このプラグインが vipa のサーバーです。別にサーバーを立てません。
+端末（KYF39）と Hermes をつなぐ口。**UI もサーバーも持たない。**
 
-## 何をするか
+## エンドポイント
 
-- `GET /` — 端末に配る画面（`ui/index.html`）
-- `GET /api/stream` — SSE（状態・差分・確定）
-- `GET /api/messages` — 履歴（8件ずつ）
-- `POST /api/in` — 文字で送る
-- `POST /api/voice` — 声で送る（Groq で文字起こし）
-- Hermes の `send()` — エージェントの返答を端末へ
-- Hermes の cron — `deliver=vipa` で端末へ
+| | |
+|---|---|
+| `GET /api/out?since=N` | 新しい返答を取る（端末が5秒ごと） |
+| `POST /api/in` | 文字を渡す `{"text":"..."}` |
+| `POST /api/voice` | 録音を渡す（`audio/mp4`）→ Groq で文字起こし |
+| `GET /api/health` | 生死 |
 
-## 設定
+`GET /api/out` は `{"messages":[{seq,role,text,ts}],"last":N}` を返す。`role` は `user` か `assistant`。
+端末は `last` を次の `since` に使う。
+
+## 置き方
 
 ```bash
-export VIPA_SECRET="好きな文字列"     # 任意
-export VIPA_LISTEN="0.0.0.0:8099"     # 既定
-export GROQ_API_KEY="..."             # 音声を使うなら
+cp -R hermes-plugin/vipa ~/.hermes/plugins/
+hermes plugins enable vipa
 ```
 
-`~/.hermes/plugins/` に置いて `hermes gateway start`。
+`~/.hermes/.env`（任意）:
 
-## 端末側
+```
+VIPA_LISTEN=0.0.0.0:8099
+VIPA_SECRET=（任意）
+GROQ_API_KEY=（音声を使うなら）
+```
 
-`app/vipaos.apk` を入れて、接続先を `http://<MacのIP>:8099/` か ngrok の URL にする。
+## 外から届かせる
 
-## 状態
+```bash
+ngrok http 8099
+```
 
-骨組み。`register_platform` / `MessageEvent` / `build_source` / `handle_message` は
-ドキュメントに合わせて書いたが、**実機での確認はまだ**。
+出た URL を端末の `/sdcard/vipaos.url` に書く。
+
+```bash
+echo 'https://xxxx.ngrok-free.app' > /tmp/vipa.url
+adb push /tmp/vipa.url /sdcard/vipaos.url
+adb shell am start -n os.vipa.kiosk/.MainActivity
+```

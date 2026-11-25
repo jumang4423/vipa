@@ -66,35 +66,39 @@ public class PollReceiver extends BroadcastReceiver {
     }
 
     private void poll(Context ctx) throws Exception {
+        SharedPreferences sp = ctx.getSharedPreferences("vipa", 0);
+        int last = sp.getInt("lastSeq", 0);
         HttpURLConnection conn = null;
         try {
-            conn = (HttpURLConnection) new URL(MainActivity.SERVER + "/api/messages?limit=1")
-                    .openConnection();
+            conn = (HttpURLConnection)
+                    new URL(MainActivity.SERVER + "/api/out?since=" + last).openConnection();
             conn.setConnectTimeout(3000);
             conn.setReadTimeout(3000);
             int code = conn.getResponseCode();
             if (code != 200) return;
-            String body = read(conn.getInputStream());
-            JSONObject o = new JSONObject(body);
-            JSONArray arr = o.getJSONArray("messages");
-            if (arr.length() == 0) return;
-            JSONObject m = arr.getJSONObject(0);
-            int seq = m.getInt("seq");
-            String role = m.getString("role");
-            String text = m.getString("text");
-
-            SharedPreferences sp = ctx.getSharedPreferences("vipa", 0);
-            int last = sp.getInt("lastSeq", 0);
-            Log.i(TAG, "poll seq=" + seq + " last=" + last + " role=" + role);
-            if (seq <= last) return;
+            JSONObject o = new JSONObject(read(conn.getInputStream()));
+            int seq = o.optInt("last", 0);
+            if (seq < last) {                       // サーバーが再起動した
+                sp.edit().putInt("lastSeq", 0).apply();
+                return;
+            }
+            JSONArray arr = o.optJSONArray("messages");
+            if (arr == null || arr.length() == 0) return;
             sp.edit().putInt("lastSeq", seq).apply();
+            Log.i(TAG, "poll seq=" + seq + " last=" + last);
 
-            if (last == 0) return;                 // 初回は基準を作るだけ
-            if (!"assistant".equals(role)) return; // 自分の発話では通知しない
-            Log.i(TAG, "new: visible=" + MainActivity.visible
-                    + " screen=" + isScreenOn(ctx));
+            if (last == 0) return;                  // 初回は基準を作るだけ
+
+            String text = null;
+            for (int k = arr.length() - 1; k >= 0; k--) {
+                JSONObject m = arr.getJSONObject(k);
+                if ("assistant".equals(m.optString("role"))) {
+                    text = m.optString("text");
+                    break;
+                }
+            }
+            if (text == null) return;
             if (MainActivity.visible && isScreenOn(ctx)) return;
-
             notify(ctx, text);
         } finally {
             if (conn != null) conn.disconnect();

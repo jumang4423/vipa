@@ -21,6 +21,20 @@ cp -R hermes-plugin/vipa ~/.hermes/plugins/
 hermes plugins enable vipa
 ```
 
+`~/.hermes/config.yaml` に有効化を1ブロック足す（**これが無いと待受が開かない**）:
+
+```yaml
+platforms:
+  vipa:
+    enabled: true
+```
+
+`platforms:` が既にあるなら、その下に `vipa:` を足す。
+
+```bash
+hermes gateway restart
+```
+
 `~/.hermes/.env`（任意）:
 
 ```

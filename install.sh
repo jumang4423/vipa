@@ -31,6 +31,22 @@ fi
 hermes plugins enable vipa >/dev/null 2>&1 || say "plugins enable: 失敗（手で hermes plugins enable vipa）"
 say "enabled"
 
+# 3b. platform を有効化（これが無いと待受が開かない）
+CFG="$H/config.yaml"
+BLOCK=$'platforms:\n  vipa:\n    enabled: true'
+if [ -f "$CFG" ] && grep -qE '^[[:space:]]*vipa:' "$CFG" && grep -qE '^platforms:' "$CFG"; then
+  say "config: vipa は設定済み"
+elif [ -f "$CFG" ] && grep -qE '^platforms:' "$CFG"; then
+  printf '\nconfig.yaml に platforms: が既にあります。この下に足してください:\n\n  vipa:\n    enabled: true\n\n' >&2
+  exit 1
+else
+  printf '\n%s\n' "$BLOCK" >> "$CFG"
+  say "config: platforms.vipa.enabled を追記"
+fi
+
+hermes gateway restart >/dev/null 2>&1 || say "gateway restart: 失敗（手で hermes gateway restart）"
+say "gateway restarted"
+
 # 4. 待受
 up() { curl -fsS "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; }
 if ! up; then

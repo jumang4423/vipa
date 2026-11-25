@@ -17,14 +17,39 @@ Hermes にこう言う。
 https://github.com/jumang4423/vipa を読んで、入れて
 ```
 
-手でやるなら2行。
+手でやるなら、この4つ。
 
 ```bash
 git clone https://github.com/jumang4423/vipa.git && cd vipa
 ./install.sh
 ```
 
-`install.sh` は、plugin を `~/.hermes/plugins/` に置き、`hermes plugins enable vipa` を実行し、`8099` が応答するか確かめる。端末が USB で挿さっていれば、APK を入れて接続先を書いて起動する。
+`install.sh` の中身はこれだけ。順に実行される。
+
+1. `hermes-plugin/vipa` を `~/.hermes/plugins/` に置く
+2. `hermes plugins enable vipa`
+3. `~/.hermes/config.yaml` に有効化の1ブロックを追記する（下記）
+4. `hermes gateway restart`
+
+```yaml
+platforms:
+  vipa:
+    enabled: true
+```
+
+`platforms:` が既に config.yaml にある人は、その下に `vipa:` を足す（`install.sh` は追記せず、そう表示して止まる）。
+
+`8099` が他の用途で埋まっている場合は、`~/.hermes/.env` に逃がす。
+
+```
+VIPA_LISTEN=0.0.0.0:8098
+```
+
+確認:
+
+```bash
+curl http://127.0.0.1:8099/api/health   # {"ok":true,...}
+```
 
 ## 端末
 

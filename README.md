@@ -1,78 +1,82 @@
 # vipa
 
-ガラホ（KYF39）を「何もできない端末」にする。
+ガラホ（KYF39）を「何もできない端末」にする。AI は家で働き、外には家の判断を通ったものだけが届く。
 
-AI は家で働き、外には判定を通ったものだけが届く。
+## 入れ方（一言）
 
-## 必要なもの
+Hermes にこう言うだけ。
 
-- **KYF39**（メルカリで 2〜5 千円。赤ロムでないこと）
-- **Mac**（常時起動）
-- **au 系の SIM**（povo など。docomo は SIM ロックで弾かれる）
-- **ngrok** のアカウント（無料。固定ドメインが 1 本つく）
+```
+https://github.com/jumang4423/vipa を読んで、全部入れて
+```
 
-## インストール
+エージェントはこれを読んで、以下を順にやる。
 
 ```bash
-# 1. Hermes
-curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
-
-# 2. これ
 git clone https://github.com/jumang4423/vipa.git
 cd vipa
+./install.sh
+```
 
-# 3. プラグイン
-cp -R hermes-plugin/vipa ~/.hermes/plugins/
+`install.sh` がやること。
 
-# 4. 起動（プラグインが 8099 で待つ）
-export VIPA_SECRET="好きな文字列"
-export GROQ_API_KEY="音声を使うなら"
-hermes gateway start
+1. `hermes-plugin/vipa` を `~/.hermes/plugins/` に置く
+2. `VIPA_SECRET` を生成して `~/.hermes/.env` に書く
+3. `hermes plugins enable vipa`
+4. `hermes gateway start`（プラグインが 8099 で待つ）
+5. `curl http://127.0.0.1:8099/api/health` で確認
+6. **端末が USB で挿さっていれば** APK を入れて、接続先を `adb push` して起動する
 
-# 5. 外から届くようにする
+その後、外で使うなら:
+
+```bash
 ngrok http 8099
+# 出たURLを端末に書く
+adb push /tmp/vipa.url /sdcard/vipaos.url && adb shell am start -n os.vipa.kiosk/.MainActivity
 ```
 
-6. KYF39 を USB で挿し、エージェントに言う。
+## 端末側の残り2つ（人間の手）
 
-```
-vipa のアプリを入れて
-```
-
-7. SIM を挿し、APN に `povo.jp` を設定する。
-
-以上です。
+- **開発者モード＋USBデバッグ**をON（設定 → 端末情報 → ビルド番号を7回）
+- **SIMを挿して APN を `povo.jp` に設定**
 
 ## しくみ
 
 ```
-[外]  KYF39（アプリは何もできない）
-        ↕  ngrok
-[家]  hermes-plugin/vipa（画面・受信・送信・音声）
-        ↕
-[家]  Hermes（考える・道具・定期実行）
+[外] KYF39（アプリは表示だけ）
+       ↕ ngrok
+[家] hermes-plugin/vipa（HTTP + SSE + 音声）
+       ↕
+[家] Hermes（考える・道具を使う・定期実行）
 ```
 
-サーバーは要りません。**プラグインがサーバーです。**
+- 画面はプラグインが配る `ui/index.html`
+- 端末は `GET /api/stream` を開きっぱなしにして、差分を受け取る
+- 声は `POST /api/voice` → Groq で文字起こし → エージェント
+- 返答は `send()` → SSE → 吹き出し
+- 定期実行は Hermes の cron から `deliver=vipa`
 
-- 端末は 1 枚の画面。開けば今日の分、閉じれば沈黙
-- 返答はエージェントが返す。判定は `criteria` ではなく **SOUL（人格）** に書く
-- 定期実行は Hermes の cron から `deliver=vipa` で届く
+**サーバーは要りません。プラグインがサーバーです。**
 
 ## フォルダ
 
 | | |
 |---|---|
 | `app/` | 端末アプリのソースと APK |
-| `hermes-plugin/vipa/` | Hermes の platform プラグイン（サーバー本体） |
+| `hermes-plugin/vipa/` | プラグイン本体（`adapter.py` がサーバー） |
+| `install.sh` | 上の 1〜6 をやる |
+
+## 状態
+
+- 端末アプリ：動く（KYF39 実機で確認済み）
+- プラグイン：**骨組み。実機では未確認**
 
 ## 制約
 
-- タッチパネルなし。4 つのキーで操作する
-- 画面は 480×854。1 行 26 文字が上限
-- 電池は 1 日
-- Android 5.1。GMS なし。FCM は使えない
-- プラグインは骨組み。実機での動作確認はまだ
+- タッチパネルなし。キー4つ
+- 480×854、1行26文字
+- Android 5.1、GMSなし（FCM不可）
+- 電池1日
 
 ## ライセンス
 

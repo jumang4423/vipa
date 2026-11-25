@@ -28,8 +28,8 @@ import java.net.URL;
  */
 public class MainActivity extends Activity {
 
-    public static final String SERVER = "http://192.168.2.101:8099";
-    private static final String HOME = SERVER + "/";
+    public static String SERVER = "http://192.168.2.101:8099";
+    private String home = SERVER + "/";
     private static final String TAG = "VIPA";
     private static final int MAX_RETRY = 6;
 
@@ -45,6 +45,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+
+        SERVER = resolveServer();
+        home = SERVER + "/";
 
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
@@ -83,7 +86,7 @@ public class MainActivity extends Activity {
                 if (retry < MAX_RETRY) {
                     retry++;
                     handler.postDelayed(new Runnable() {
-                        public void run() { web.loadUrl(HOME); }
+                        public void run() { web.loadUrl(home); }
                     }, 3000L * retry);
                 } else {
                     v.loadData(offlinePage(desc), "text/html; charset=utf-8", "utf-8");
@@ -93,7 +96,7 @@ public class MainActivity extends Activity {
 
         setContentView(web);
         hidePointerIcon();
-        web.loadUrl(HOME);
+        web.loadUrl(home);
         handler.postDelayed(new Runnable() {
             public void run() { applySoftkeys(); }
         }, 700);
@@ -229,6 +232,28 @@ public class MainActivity extends Activity {
 
     // ------------------------------------------------------------ keys
 
+    /** /sdcard/vipaos.url があればそれを使う。無ければ既定。 */
+    private String resolveServer() {
+        try {
+            java.io.File f = new java.io.File("/sdcard/vipaos.url");
+            if (f.exists()) {
+                java.io.BufferedReader r = new java.io.BufferedReader(
+                        new java.io.FileReader(f));
+                String line = r.readLine();
+                r.close();
+                if (line != null && line.trim().length() > 0) {
+                    String u = line.trim();
+                    if (u.endsWith("/")) u = u.substring(0, u.length() - 1);
+                    Log.i(TAG, "server from file: " + u);
+                    return u;
+                }
+            }
+        } catch (Throwable t) {
+            Log.i(TAG, "url file n/a " + t);
+        }
+        return SERVER;
+    }
+
     private int dip(int v) {
         return (int) (v * getResources().getDisplayMetrics().density + 0.5f);
     }
@@ -270,7 +295,7 @@ public class MainActivity extends Activity {
     public boolean onKeyDown(int keyCode, KeyEvent e) {
         if (keyCode == KeyEvent.KEYCODE_MENU) {
             retry = 0;
-            web.loadUrl(HOME);
+            web.loadUrl(home);
             return true;
         }
         return super.onKeyDown(keyCode, e);
@@ -348,7 +373,7 @@ public class MainActivity extends Activity {
             if (c != null) c.disconnect();
             if (!ok) {
                 handler.post(new Runnable() {
-                    public void run() { web.loadUrl(HOME); }
+                    public void run() { web.loadUrl(home); }
                 });
             }
         }

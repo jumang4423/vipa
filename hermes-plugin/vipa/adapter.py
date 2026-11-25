@@ -91,6 +91,94 @@ CORS = {
 }
 
 
+KINDS = ("weight", "meal", "alcohol", "mood", "sleep", "steps", "health")
+
+
+def _day_path(day=None):
+    import datetime
+    day = day or datetime.date.today().isoformat()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day or ""):
+        day = datetime.date.today().isoformat()
+    return os.path.join(DAYS, day + ".json"), day
+
+
+def read_day(day=None):
+    path, day = _day_path(day)
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        data = {}
+    entries = data.get("entries") or []
+    entries.sort(key=lambda e: e.get("ts") or "")
+    return {"date": day, "entries": entries}
+
+
+def log_entry(kind, text="", kcal=None, kg=None, ts=None):
+    """Append one record for today. Shared by the HTTP endpoint and the vipa_log tool."""
+    import datetime
+    if kind not in KINDS:
+        raise ValueError("kind must be one of " + ", ".join(KINDS))
+    now = datetime.datetime.now()
+    ts = ts or now.strftime("%H:%M")
+    if not re.fullmatch(r"\d{1,2}:\d{2}", str(ts)):
+        ts = now.strftime("%H:%M")
+    hh, mm = str(ts).split(":")
+    entry = {"ts": "%02d:%s" % (int(hh), mm), "kind": kind}
+    if text:
+        entry["text"] = str(text)
+    if kcal not in (None, ""):
+        try:
+            entry["kcal"] = int(round(float(kcal)))
+        except Exception:
+            pass
+    if kg not in (None, ""):
+        try:
+            entry["kg"] = round(float(kg), 1)
+        except Exception:
+            pass
+    os.makedirs(DAYS, exist_ok=True)
+    path, day = _day_path()
+    data = read_day(day)
+    data["entries"].append(entry)
+    data["entries"].sort(key=lambda e: e.get("ts") or "")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    return entry
+
+
+def weights(n=30):
+    out = []
+    try:
+        names = sorted(os.listdir(DAYS))[-int(n):]
+    except Exception:
+        return out
+    for name in names:
+        if not name.endswith(".json"):
+            continue
+        day = read_day(name[:-5])
+        kgs = [e["kg"] for e in day["entries"] if e.get("kind") == "weight" and e.get("kg")]
+        if kgs:
+            out.append({"date": day["date"], "kg": kgs[-1]})
+    return out
+
+
+def _tool_log(args, **_):
+    """vipa_log: record what the body reports, in one call."""
+    kind = str(args.get("kind") or "").strip().lower()
+    try:
+        entry = log_entry(kind, str(args.get("text") or "").strip(),
+                          args.get("kcal"), args.get("kg"), args.get("ts"))
+    except Exception as e:
+        return "Error: %s" % e
+    bits = [entry["ts"], entry["kind"]]
+    if entry.get("kcal"):
+        bits.append("%d kcal" % entry["kcal"])
+    if entry.get("kg"):
+        bits.append("%s kg" % entry["kg"])
+    return "logged " + " ".join(bits) + (" — " + entry["text"] if entry.get("text") else "")
+
+
 class VipaAdapter(BasePlatformAdapter):
     def __init__(self, config: PlatformConfig):
         super().__init__(config, Platform("vipa"))
@@ -216,72 +304,6 @@ class VipaAdapter(BasePlatformAdapter):
                 since = 0
             rows = [m for m in self._out if m["seq"] > since]
             return {"messages": rows[-40:], "last": self._seq}
-
-    # ---------------------------------------------------------------- the body
-
-    @staticmethod
-    def _day_path(day=None):
-        import datetime
-        day = day or datetime.date.today().isoformat()
-        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day or ""):
-            day = datetime.date.today().isoformat()
-        return os.path.join(DAYS, day + ".json"), day
-
-    def _day(self, day=None):
-        path, day = self._day_path(day)
-        try:
-            with open(path, encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception:
-            data = {}
-        entries = data.get("entries") or []
-        entries.sort(key=lambda e: e.get("ts") or "")
-        return {"date": day, "entries": entries}
-
-    def _log(self, kind, text="", kcal=None, kg=None, ts=None):
-        import datetime
-        now = datetime.datetime.now()
-        ts = ts or now.strftime("%H:%M")
-        if not re.fullmatch(r"\d{1,2}:\d{2}", ts or ""):
-            ts = now.strftime("%H:%M")
-        ts = "%02d:%s" % (int(ts.split(":")[0]), ts.split(":")[1])
-        entry = {"ts": ts, "kind": kind}
-        if text:
-            entry["text"] = text
-        if kcal not in (None, ""):
-            try:
-                entry["kcal"] = int(round(float(kcal)))
-            except Exception:
-                pass
-        if kg not in (None, ""):
-            try:
-                entry["kg"] = round(float(kg), 1)
-            except Exception:
-                pass
-        os.makedirs(DAYS, exist_ok=True)
-        path, day = self._day_path()
-        day_data = self._day(day)
-        day_data["entries"].append(entry)
-        day_data["entries"].sort(key=lambda e: e.get("ts") or "")
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(day_data, f, ensure_ascii=False, indent=2)
-        return entry
-
-    def _weights(self, n=30):
-        import datetime
-        out = []
-        try:
-            names = sorted(os.listdir(DAYS))[-int(n):]
-        except Exception:
-            return out
-        for name in names:
-            if not name.endswith(".json"):
-                continue
-            day = self._day(name[:-5])
-            kgs = [e["kg"] for e in day["entries"] if e.get("kind") == "weight" and e.get("kg")]
-            if kgs:
-                out.append({"date": day["date"], "kg": kgs[-1]})
-        return out
 
     def _schedule(self):
         """The day as the phone shows it. Edit schedule.json; nothing else to touch."""
@@ -413,7 +435,7 @@ class VipaAdapter(BasePlatformAdapter):
                         k, _, v = kv.partition("=")
                         if k == "date":
                             day = v
-                    self._send(200, adapter._day(day))
+                    self._send(200, read_day(day))
                 elif path == "/api/days":
                     n = 30
                     for kv in query.split("&"):
@@ -423,7 +445,7 @@ class VipaAdapter(BasePlatformAdapter):
                                 n = int(v)
                             except ValueError:
                                 pass
-                    self._send(200, {"weights": adapter._weights(n)})
+                    self._send(200, {"weights": weights(n)})
                 elif path == "/api/schedule":
                     self._send(200, adapter._schedule())
                 elif path == "/api/out":
@@ -485,8 +507,12 @@ class VipaAdapter(BasePlatformAdapter):
                     if kind not in ("weight", "meal", "alcohol", "mood", "sleep", "steps", "health"):
                         self._send(400, {"error": "kind must be weight|meal|alcohol|mood|sleep|steps|health"})
                         return
-                    entry = adapter._log(kind, (body.get("text") or "").strip(),
-                                         body.get("kcal"), body.get("kg"), body.get("ts"))
+                    try:
+                        entry = log_entry(kind, (body.get("text") or "").strip(),
+                                          body.get("kcal"), body.get("kg"), body.get("ts"))
+                    except Exception as e:
+                        self._send(400, {"error": str(e)})
+                        return
                     self._send(200, {"ok": True, "entry": entry})
                     return
 
@@ -651,6 +677,30 @@ def register(ctx):
     )
     # One phone, at home. No pairing prompt.
     kwargs["standalone_sender_fn"] = _standalone_send
+
+    ctx.register_tool(
+        name="vipa_log",
+        toolset="hermes-vipa",
+        schema={
+            "name": "vipa_log",
+            "description": ("Record what the user's body reports today: weight, a meal with "
+                            "estimated kcal, alcohol, mood, sleep, steps, or another health note. "
+                            "Call it in the same turn the user tells you; do not promise it."),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "kind": {"type": "string", "enum": list(KINDS)},
+                    "text": {"type": "string", "description": "what was eaten / how it felt"},
+                    "kcal": {"type": "number", "description": "estimated calories, meals only"},
+                    "kg": {"type": "number", "description": "body weight"},
+                    "ts": {"type": "string", "description": "HH:MM; omit for now"},
+                },
+                "required": ["kind"],
+            },
+        },
+        handler=_tool_log,
+        emoji="\U0001f9b7",
+    )
     # Cron: `deliver=vipa` resolves the home channel from this env var.
     kwargs["cron_deliver_env_var"] = "VIPA_HOME_CHANNEL"
     kwargs["allowed_users_env"] = "VIPA_ALLOWED_USERS"

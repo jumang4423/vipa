@@ -93,6 +93,28 @@ echo 'VIPA_CHAT=vipa2' >> ~/.hermes/.env
 If you cannot start a new session, `VIPA_INJECT_RULES=1` also carries a condensed version of
 the rules on every inbound message. Off by default; it is a fallback, not the design.
 
+## Optional: no approval prompts
+
+```yaml
+approvals:
+  mode: "off"                 # same as --yolo
+  cron_mode: approve
+  single_query_mode: approve
+  unattended_mode: approve
+  destructive_slash_confirm: false
+  mcp_reload_confirm: false
+```
+
+With `mode: off` the agent runs dangerous commands without asking. Do this only on a machine
+you are willing to hand to it. One guard stays regardless: it cannot restart or stop its own
+gateway (that would kill the turn doing it), which is why `install.sh` hands you `restart.sh`.
+
+Set it with the CLI, not by hand — the key is top-level:
+
+```bash
+hermes config set approvals.mode off
+```
+
 ## Settings (`~/.hermes/.env`)
 
 ```

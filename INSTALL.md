@@ -105,6 +105,9 @@ Two tools do this without curl:
 
 - `vipa_log(kind, text?, kcal?, kg?, ts?)` — append one entry
 - `vipa_day(date?)` — read a day back (default today)
+- `vipa_days(from, to?)` — one line per day plus averages and the weight change
+
+Entries may also carry `p`, `f`, `c` (protein/fat/carbs) when the user knows them.
 
 A body record is not a scoreboard: `criteria.md` allows numbers here because they are the
 user's own body reporting itself, not a comparison with anyone. The phone shows **today

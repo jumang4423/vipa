@@ -218,11 +218,59 @@ def _tool_day(args, **_):
             bits.append("%d kcal" % e["kcal"])
         if e.get("kg"):
             bits.append("%s kg" % e["kg"])
+        macros = [("%s%s" % (k.upper(), e[k])) for k in ("p", "f", "c") if e.get(k)]
+        if macros:
+            bits.append(" ".join(macros))
         line = " ".join(bits)
         if e.get("text"):
             line += ": " + e["text"]
         lines.append("- " + line)
     return "\n".join(lines)
+
+
+def _tool_days(args, **_):
+    """vipa_days: a range of days, one line each, with totals — for trends."""
+    import datetime
+    try:
+        end = datetime.date.fromisoformat(str(args.get("to") or "").strip() or datetime.date.today().isoformat())
+        start = datetime.date.fromisoformat(str(args.get("from") or "").strip())
+    except Exception:
+        return "Error: pass from=YYYY-MM-DD (and optionally to=YYYY-MM-DD)."
+    if start > end:
+        start, end = end, start
+    if (end - start).days > 120:
+        return "Error: keep the range under 120 days."
+    lines, total_kcal, days_with_food, weights = [], 0, 0, []
+    d = start
+    while d <= end:
+        day = read_day(d.isoformat())
+        entries = day["entries"]
+        if entries:
+            kcal = sum(e.get("kcal", 0) for e in entries)
+            macros = {k: sum(e.get(k, 0) for e in entries) for k in ("p", "f", "c")}
+            kgs = [e["kg"] for e in entries if e.get("kind") == "weight" and e.get("kg")]
+            steps = [e for e in entries if e.get("kind") == "steps"]
+            bit = "%s %d kcal" % (d.isoformat(), kcal)
+            if any(macros.values()):
+                bit += " P%d F%d C%d" % (macros["p"], macros["f"], macros["c"])
+            if kgs:
+                bit += " | %s kg" % kgs[-1]
+                weights.append((d.isoformat(), kgs[-1]))
+            if steps:
+                bit += " | " + steps[-1].get("text", "")
+            lines.append(bit)
+            if kcal:
+                total_kcal += kcal
+                days_with_food += 1
+        d += datetime.timedelta(days=1)
+    if not lines:
+        return "Nothing recorded in that range."
+    out = lines[:]
+    if days_with_food:
+        out.append("average %.0f kcal over %d days with food" % (total_kcal / days_with_food, days_with_food))
+    if len(weights) >= 2:
+        out.append("weight %s kg (%s) -> %s kg (%s)" % (weights[0][1], weights[0][0], weights[-1][1], weights[-1][0]))
+    return "\n".join(out)
 
 
 class VipaAdapter(BasePlatformAdapter):
@@ -775,6 +823,27 @@ def register(ctx):
         },
         handler=_tool_day,
         emoji="\U0001f4c4",
+    )
+
+    ctx.register_tool(
+        name="vipa_days",
+        toolset="hermes-vipa",
+        schema={
+            "name": "vipa_days",
+            "description": ("Summarise the user's recorded days over a range: kcal, macros, weight, "
+                            "steps, one line per day plus averages. Use it for trends, deficits, or "
+                            "'why did I gain weight' questions."),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "from": {"type": "string", "description": "YYYY-MM-DD"},
+                    "to": {"type": "string", "description": "YYYY-MM-DD; omit for today"},
+                },
+                "required": ["from"],
+            },
+        },
+        handler=_tool_days,
+        emoji="\U0001f4c8",
     )
     # Cron: `deliver=vipa` resolves the home channel from this env var.
     kwargs["cron_deliver_env_var"] = "VIPA_HOME_CHANNEL"

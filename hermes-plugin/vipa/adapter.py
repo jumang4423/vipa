@@ -34,46 +34,53 @@ log = logging.getLogger(__name__)
 GROQ_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 STT_MODEL = "whisper-large-v3-turbo"
 MAX_OUT = 200
-
-# Hermes does not reliably put a plugin platform's hint into a gateway session's prompt
-# (verified on 0.23.4: platform_hint, agent.platform_hints and SOUL.md all failed to reach
-# the vipa agent). Until that is fixed upstream, the rules ride on the message itself.
-RULES = (
-    "[vipa] The phone is a KYF39: 480x854, four keys, voice only. "
-    "Only what society requires today may reach it: a deadline, a person waiting for an answer, "
-    "a commitment, a change that alters today's plan. "
-    "Never counts, rankings, streaks, scores or anything that makes someone check again — if a job "
-    "would send that, refuse and say why in one line. "
-    "Reply in one short line. No emoji. If nothing is owed, say nothing."
-)
 MAX_BODY = 32 * 1024 * 1024
+# One short line is the design, so it is enforced rather than requested. 480px wide at
+# 26 characters a line: 80 characters is three lines and already the ceiling.
+MAX_CHARS = int(os.environ.get("VIPA_MAX_CHARS") or 96)
+
+
+
+def condense(text, limit=None):
+    """One short line, but never a sentence cut in half.
+
+    Take whole sentences while they fit; if none fits, cut at a clause boundary. Only
+    when even that fails does it hard-cut, and then it marks the cut.
+    """
+    import re
+    limit = limit or MAX_CHARS
+    t = re.sub(r"```.*?```", " ", text or "", flags=re.S)
+    t = re.sub(r"(?m)^\s*(?:[-*•]|\d+[.)])\s+", "", t)
+    t = re.sub(r"[*_`#>|]+", "", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    if len(t) <= limit:
+        return t
+
+    # whole sentences first
+    acc = ""
+    for part in re.split(r"(?<=[。．.!?！?])", t):
+        if not part:
+            continue
+        if len((acc + part).strip()) <= limit:
+            acc += part
+        else:
+            break
+    if acc.strip():
+        return acc.strip()
+
+    # no sentence fits: cut at a clause boundary, not mid-word
+    for ch in ("、,;:）)", " "):
+        cut = t.rfind(ch, 0, limit)
+        if cut >= limit // 3:
+            return t[:cut].rstrip(" 、,;:（(") + "\u2026"
+    return t[:limit - 1].rstrip() + "\u2026"
+
 
 CORS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 }
-
-
-def _ssl_context():
-    """Find a CA bundle. Works where certifi is absent (e.g. Hermes' own Python)."""
-    import ssl
-    paths = []
-    try:
-        import certifi
-        paths.append(certifi.where())
-    except Exception:
-        pass
-    paths += ["/etc/ssl/cert.pem",
-              "/etc/ssl/certs/ca-certificates.crt",
-              "/usr/local/etc/openssl/cert.pem"]
-    for path in paths:
-        if path and os.path.exists(path):
-            try:
-                return ssl.create_default_context(cafile=path)
-            except Exception:
-                pass
-    return ssl.create_default_context()
 
 
 class VipaAdapter(BasePlatformAdapter):
@@ -198,7 +205,7 @@ class VipaAdapter(BasePlatformAdapter):
     NOISE = ("Self-improvement review", "Gateway online", "Memory updated")
 
     async def send(self, chat_id, content, reply_to=None, metadata=None):
-        text = (content or "").strip()
+        text = condense(content)
         if not text:
             return SendResult(success=False)
         if any(n in text for n in self.NOISE):
@@ -303,7 +310,7 @@ class VipaAdapter(BasePlatformAdapter):
                 if path == "/api/push":
                     raw = self._body()
                     try:
-                        text = (json.loads(raw.decode() or "{}").get("text") or "").strip()
+                        text = condense(json.loads(raw.decode() or "{}").get("text") or "")
                     except Exception:
                         self._send(400, {"error": "bad json"})
                         return
@@ -394,7 +401,7 @@ async def _standalone_send(pconfig, chat_id, message, *, thread_id=None, media_f
     """
     import urllib.request
 
-    text = (message or "").strip()
+    text = condense(message)
     if not text:
         return {"success": False, "error": "empty message"}
 

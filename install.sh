@@ -67,17 +67,6 @@ else
 fi
 grep -q '^VIPA_ALLOW_ALL_USERS=' "$ENV" || printf 'VIPA_ALLOW_ALL_USERS=1\n' >> "$ENV"
 
-# A session keeps the system prompt it was born with, so changing philosophy.md or
-# criteria.md has no effect until a new session starts. Derive the chat id from their
-# content: edit the rules, and the next install opens a fresh session automatically.
-RULES_SHA="$(cat "$SRC/philosophy.md" "$SRC/criteria.md" 2>/dev/null | shasum -a 256 | cut -c1-6)"
-CHAT_ID="vipa-${RULES_SHA:-default}"
-if grep -q '^VIPA_CHAT=' "$ENV"; then
-  sed -i.bak "s|^VIPA_CHAT=.*|VIPA_CHAT=${CHAT_ID}|" "$ENV"; rm -f "$ENV.bak"
-else
-  printf 'VIPA_CHAT=%s\n' "$CHAT_ID" >> "$ENV"
-fi
-say "session -> $CHAT_ID (derived from the rules; change them and this moves)"
 say "listen -> 0.0.0.0:${PORT} (no pairing)"
 
 # ---------------------------------------------------------------- 3. config

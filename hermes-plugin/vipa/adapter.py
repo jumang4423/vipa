@@ -84,6 +84,12 @@ def condense(text, limit=None):
     return t[:limit - 1].rstrip() + "\u2026"
 
 
+RULES = (
+    "[vipa] The phone is a KYF39: one screen, four keys, voice only. Only what society "
+    "requires today may reach it. Never counts, rankings, streaks or anything that makes "
+    "someone check again. Reply in one short line. No emoji."
+)
+
 CORS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
@@ -92,6 +98,7 @@ CORS = {
 
 
 KINDS = ("weight", "meal", "mood", "sleep", "steps", "health")
+_DAY_LOCK = threading.Lock()
 
 
 def _day_path(day=None):
@@ -107,7 +114,10 @@ def read_day(day=None):
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
-    except Exception:
+    except FileNotFoundError:
+        data = {}
+    except Exception as e:
+        log.warning("vipa: %s is unreadable (%s); treating it as empty", path, e)
         data = {}
     entries = data.get("entries") or []
     entries.sort(key=lambda e: e.get("ts") or "")
@@ -126,7 +136,7 @@ def log_entry(kind, text="", kcal=None, kg=None, ts=None):
     hh, mm = str(ts).split(":")
     entry = {"ts": "%02d:%s" % (int(hh), mm), "kind": kind}
     if text:
-        entry["text"] = str(text)
+        entry["text"] = str(text)[:2000]
     if kcal not in (None, ""):
         try:
             entry["kcal"] = int(round(float(kcal)))
@@ -137,13 +147,23 @@ def log_entry(kind, text="", kcal=None, kg=None, ts=None):
             entry["kg"] = round(float(kg), 1)
         except Exception:
             pass
-    os.makedirs(DAYS, exist_ok=True)
+    os.makedirs(DAYS, mode=0o700, exist_ok=True)
+    try:
+        os.chmod(DAYS, 0o700)
+    except OSError:
+        pass
     path, day = _day_path()
-    data = read_day(day)
-    data["entries"].append(entry)
-    data["entries"].sort(key=lambda e: e.get("ts") or "")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    with _DAY_LOCK:
+        data = read_day(day)
+        data["entries"].append(entry)
+        data["entries"].sort(key=lambda e: e.get("ts") or "")
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, path)
     return entry
 
 
@@ -428,6 +448,12 @@ class VipaAdapter(BasePlatformAdapter):
             def log_message(self, *args):
                 return
 
+            def handle_one_request(self):
+                try:
+                    BaseHTTPRequestHandler.handle_one_request(self)
+                except (BrokenPipeError, ConnectionResetError):
+                    self.close_connection = True
+
             def _send(self, code, obj):
                 body = json.dumps(obj, ensure_ascii=False).encode()
                 self.send_response(code)
@@ -436,7 +462,10 @@ class VipaAdapter(BasePlatformAdapter):
                 for k, v in CORS.items():
                     self.send_header(k, v)
                 self.end_headers()
-                self.wfile.write(body)
+                try:
+                    self.wfile.write(body)
+                except (BrokenPipeError, ConnectionResetError):
+                    self.close_connection = True
 
             def _body(self):
                 try:

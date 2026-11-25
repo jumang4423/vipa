@@ -49,6 +49,24 @@
     align-items:center}
   .typing .t{font-size:12px;color:#8d8d8d;margin-left:9px}
 
+  /* recording: a live bar meter on the user side */
+  .rec{display:none;-webkit-align-self:flex-end;align-self:flex-end;
+    margin:0 0 11px;padding:10px 14px;border-radius:16px;
+    border-bottom-right-radius:4px;background:#f1f1f1;color:#0d0d0d;
+    -webkit-box-align:center;align-items:center}
+  .rec.on{display:-webkit-box;display:flex}
+  .rec .bars{display:-webkit-box;display:flex;-webkit-box-align:end;align-items:flex-end;
+    height:18px;margin-right:9px}
+  .rec .bars b{display:block;width:3px;margin-right:3px;background:#0d0d0d;border-radius:2px;
+    -webkit-animation:pulse 900ms ease-in-out infinite;animation:pulse 900ms ease-in-out infinite}
+  .rec .bars b:nth-child(1){height:6px;-webkit-animation-delay:0ms;animation-delay:0ms}
+  .rec .bars b:nth-child(2){height:14px;-webkit-animation-delay:120ms;animation-delay:120ms}
+  .rec .bars b:nth-child(3){height:9px;-webkit-animation-delay:240ms;animation-delay:240ms}
+  .rec .bars b:nth-child(4){height:16px;-webkit-animation-delay:360ms;animation-delay:360ms}
+  .rec .t{font-size:12px;letter-spacing:.04em}
+  @-webkit-keyframes pulse{0%,100%{height:4px;opacity:.45}50%{height:18px;opacity:1}}
+  @keyframes pulse{0%,100%{height:4px;opacity:.45}50%{height:18px;opacity:1}}
+
   .flower{position:relative;width:24px;height:24px;flex:0 0 auto}
   .flower b{position:absolute;left:50%;top:50%;width:5px;height:8px;
     margin:-4px 0 0 -2.5px;border-radius:50%;background:#e9e9e9;opacity:.16;
@@ -77,6 +95,10 @@
   <img class="hd" src="header.png" alt="">
 
   <div class="thread" id="thread">
+    <div class="rec" id="rec">
+      <span class="bars"><b></b><b></b><b></b><b></b></span>
+      <span class="t" id="rec-text">Listening</span>
+    </div>
     <div class="typing" id="typing">
       <div class="flower"><b></b><b></b><b></b><b></b><b></b><b></b><i></i></div>
       <span class="t" id="typing-text">Thinking</span>
@@ -193,6 +215,23 @@ function showTyping(label) {
   }
 }
 function hideTyping() { typing.className = 'typing'; typingSince = 0; }
+
+/* called from Java while the recorder is running */
+var rec = document.getElementById('rec');
+var recText = document.getElementById('rec-text');
+var recSince = 0;
+
+function showRecording(label) {
+  recText.textContent = label || 'Listening';
+  rec.className = 'rec on';
+  recSince = Date.now();
+  thread.appendChild(rec);
+  bottom();
+}
+function hideRecording() {
+  rec.className = 'rec';
+  recSince = 0;
+}
 
 /* ---------- poll ---------- */
 function poll() {

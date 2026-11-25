@@ -351,16 +351,19 @@ public class MainActivity extends Activity {
             if (f.exists()) f.delete();
             rec.start(f);
             setSk(0, "■ Stop");
+            web.loadUrl("javascript:showRecording()");
             Log.i(TAG, "rec start");
         } catch (Throwable t) {
             Log.i(TAG, "rec FAIL " + t);
             rec.release();
             setSk(0, "Reply");
+            web.loadUrl("javascript:hideRecording()");
         }
     }
 
     private void stopVoice() {
         setSk(0, "Reply");
+        web.loadUrl("javascript:hideRecording()");
         web.loadUrl("javascript:showTyping()");
         new Thread(new Runnable() {
             public void run() {

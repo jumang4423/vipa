@@ -205,7 +205,8 @@ class VipaAdapter(BasePlatformAdapter):
     # ---------------------------------------------------------------- outbound
 
     # Notices the gateway emits about itself. They are not for the phone.
-    NOISE = ("Self-improvement review", "Gateway online", "Memory updated")
+    NOISE = ("Self-improvement review", "Gateway online", "Memory updated",
+             "Redirected current run", "\u21aa")
 
     async def send(self, chat_id, content, reply_to=None, metadata=None):
         text = condense(content)

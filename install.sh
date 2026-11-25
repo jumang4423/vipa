@@ -16,6 +16,7 @@ say() { printf '  %s\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
 health() { curl -fsS -m 2 "http://127.0.0.1:$1/api/health" 2>/dev/null | grep -q '"ok": true'; }
+vipa_up() { curl -fsS -m 2 "http://127.0.0.1:$1/api/health" 2>/dev/null | grep -q '"seq"'; }
 taken()  { lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | grep -q .; }
 
 command -v hermes >/dev/null 2>&1 || die "hermes が無い"
@@ -32,7 +33,7 @@ say "plugin enabled"
 
 # ---------------------------------------------------------------- 2. port
 PORT=""
-for p in 8099 8098 8097 8096 8095; do
+for p in ${VIPA_PORTS:-8099 8098 8097 8096 8095}; do
   if ! taken "$p" || health "$p"; then PORT="$p"; break; fi
 done
 [ -n "$PORT" ] || die "空きポートが無い（8095-8099 が全部埋まっている）"
@@ -96,6 +97,11 @@ else
   HOW="hermes gateway stop/start"
 fi
 REPORT="${VIPA_REPORT:-/tmp/vipa-install.txt}"
+FRESH=1
+if vipa_up "$PORT"; then
+  FRESH=0
+  say "vipa は既に応答している（再起動しない。セッションは落ちない）"
+else
 rm -f "$REPORT"
 nohup bash -c "
   sleep 2
@@ -108,13 +114,16 @@ nohup bash -c "
   { echo fail; tail -8 '$H/logs/gateway.log' 2>/dev/null; } > '$REPORT'
 " >/dev/null 2>&1 &
 say "gateway を再起動中（${HOW}、結果は20〜40秒後に ${REPORT}）"
+fi
 
-# 4b. この端末を home channel にする（初回の案内を出させない）＋箱を空にする
-curl -fsS -m 5 -X POST "http://127.0.0.1:${PORT}/api/in" \
-  -H 'Content-Type: application/json' -d '{"text":"/sethome"}' >/dev/null 2>&1 || true
-sleep 8
-curl -fsS -m 5 -X POST "http://127.0.0.1:${PORT}/api/reset" >/dev/null 2>&1 || true
-say "home channel を設定し、画面を空にした"
+# 4b. 初回だけ: home channel にして、画面を空にする
+if [ "$FRESH" = "1" ]; then
+  curl -fsS -m 5 -X POST "http://127.0.0.1:${PORT}/api/in" \
+    -H 'Content-Type: application/json' -d '{"text":"/sethome"}' >/dev/null 2>&1 || true
+  sleep 8
+  curl -fsS -m 5 -X POST "http://127.0.0.1:${PORT}/api/reset" >/dev/null 2>&1 || true
+  say "home channel を設定し、画面を空にした"
+fi
 
 # ---------------------------------------------------------------- 5. URL
 URL="http://$(ipconfig getifaddr en0 2>/dev/null || echo 127.0.0.1):$PORT"
@@ -176,15 +185,18 @@ else
 fi
 
 # ---------------------------------------------------------------- 7. 確認
-for _ in $(seq 1 45); do [ -f "$REPORT" ] && break; sleep 1; done
-if [ -f "$REPORT" ] && head -1 "$REPORT" | grep -q ok; then
-  say "server: http://127.0.0.1:$PORT ok"
-  health "$PORT" || say "（まだ応答しない。数秒後に再確認）"
-elif [ -f "$REPORT" ]; then
-  say "待受が開かなかった。$REPORT:"
-  sed 's/^/    /' "$REPORT" | tail -8
+if [ "$FRESH" = "0" ]; then
+  say "server: http://127.0.0.1:${PORT} ok（そのまま）"
 else
-  say "再起動の結果がまだ出ていない（$REPORT を後で見る）"
+  for _ in $(seq 1 45); do [ -f "$REPORT" ] && break; sleep 1; done
+  if [ -f "$REPORT" ] && head -1 "$REPORT" | grep -q ok; then
+    say "server: http://127.0.0.1:${PORT} ok"
+  elif [ -f "$REPORT" ]; then
+    say "待受が開かなかった。$REPORT:"
+    sed 's/^/    /' "$REPORT" | tail -8
+  else
+    say "再起動の結果がまだ出ていない（$REPORT を後で見る）"
+  fi
 fi
 
 printf '\n'

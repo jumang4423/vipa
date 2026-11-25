@@ -31,7 +31,7 @@ VIPA_NGROK=1 ./install.sh    # 外からも使う
 2. `hermes plugins enable vipa`
 3. `config.yaml` に `platforms.vipa.enabled` を入れる（既にあれば触らない／必ずバックアップを取る）
 4. `8099` が他プロセスに使われていたら `8098` に逃がす（`~/.hermes/.env` の `VIPA_LISTEN`）
-5. `gateway stop` → `start` して、`/api/health` が返るまで最大40秒待つ。返らなければログ末尾を出して止まる
+5. gateway を再起動し、`/api/health` が返るまで最大40秒待つ。**再起動は切り離して仕掛ける**（Hermes のセッションの中から実行されると、その場で再起動するとセッションごと落ちるため）。結果は `/tmp/vipa-install.txt` に `ok` か失敗ログが出る
 6. 端末が USB で挿さっていれば、APK を入れて接続先を書いて起動
 7. `VIPA_NGROK=1` なら ngrok を張り、**その URL** を端末に書く
 

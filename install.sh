@@ -68,15 +68,23 @@ else:
 PY
 
 # ---------------------------------------------------------------- 4. gateway
-hermes gateway stop  >/dev/null 2>&1 || true
-hermes gateway start >/dev/null 2>&1 || true
-for _ in $(seq 1 40); do health "$PORT" && break; sleep 1; done
-if ! health "$PORT"; then
-  say "待受が開かない。ログ末尾:"
-  tail -8 "$H/logs/gateway.log" 2>/dev/null | sed 's/^/    /' || true
-  die "$PORT/api/health が応答しない"
-fi
-say "server: http://127.0.0.1:$PORT ok"
+# ここを実行しているのが gateway の中（Hermes のセッション）だと、再起動で
+# このスクリプトごと落ちる。だから再起動は切り離して仕掛け、結果はファイルに書かせ、
+# スクリプト自身は「仕掛けた」で終わる。
+REPORT="${VIPA_REPORT:-/tmp/vipa-install.txt}"
+rm -f "$REPORT"
+nohup bash -c "
+  sleep 2
+  hermes gateway stop  >/dev/null 2>&1 || true
+  hermes gateway start >/dev/null 2>&1 || true
+  for _ in \$(seq 1 40); do
+    curl -fsS -m 2 http://127.0.0.1:$PORT/api/health 2>/dev/null | grep -q '\"ok\": true' \
+      && { echo ok > '$REPORT'; exit 0; }
+    sleep 1
+  done
+  { echo fail; tail -8 '$H/logs/gateway.log' 2>/dev/null; } > '$REPORT'
+" >/dev/null 2>&1 &
+say "gateway を再起動中（結果は20〜40秒後に ${REPORT}）"
 
 # ---------------------------------------------------------------- 5. URL
 URL="http://$(ipconfig getifaddr en0 2>/dev/null || echo 127.0.0.1):$PORT"
@@ -105,6 +113,17 @@ else
 fi
 
 # ---------------------------------------------------------------- 7. 確認
+for _ in $(seq 1 45); do [ -f "$REPORT" ] && break; sleep 1; done
+if [ -f "$REPORT" ] && head -1 "$REPORT" | grep -q ok; then
+  say "server: http://127.0.0.1:$PORT ok"
+  health "$PORT" || say "（まだ応答しない。数秒後に再確認）"
+elif [ -f "$REPORT" ]; then
+  say "待受が開かなかった。$REPORT:"
+  sed 's/^/    /' "$REPORT" | tail -8
+else
+  say "再起動の結果がまだ出ていない（$REPORT を後で見る）"
+fi
+
 say "done"
 printf '\n  curl "http://127.0.0.1:%s/api/health"\n' "$PORT"
 printf '  curl -X POST "http://127.0.0.1:%s/api/in" -H "Content-Type: application/json" -d '"'"'{"text":"こんにちは"}'"'"'\n' "$PORT"

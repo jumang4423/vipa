@@ -13,6 +13,7 @@ No UI, no extra server, no third-party dependencies: stdlib only.
       POST /api/day          append weight|meal|mood|sleep|steps|health
       GET  /api/days?n=30    weights over time, for the graph
       POST /api/push         {"text": "..."} straight to the phone, no agent
+      POST /api/rotate       start a fresh session (no message, no clear)
       POST /api/reset        empty the outbox
       GET  /api/health
 
@@ -619,6 +620,13 @@ class VipaAdapter(BasePlatformAdapter):
                         self._send(400, {"error": str(e)})
                         return
                     self._send(200, {"ok": True, "entry": entry})
+                    return
+
+                if path == "/api/rotate":
+                    # start a fresh session now; the screen and the outbox are untouched
+                    adapter._session_day = adapter._cycle_day()
+                    adapter._rotate_session()
+                    self._send(200, {"ok": True, "chat_id": adapter.chat_id})
                     return
 
                 if path == "/api/reset":

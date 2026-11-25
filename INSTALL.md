@@ -91,6 +91,7 @@ Third screen (press Switch twice). One JSON per day, under `~/.hermes/vipa/days/
 GET  /api/day?date=YYYY-MM-DD     {date, entries:[{ts, kind, text?, kcal?, kg?}]}
 POST /api/day                     append one entry
 GET  /api/days?n=30               [{date, kg}] — the weight graph
+POST /api/rotate                  start a fresh session now (no message, no clear)
 ```
 
 `kind` is one of `weight meal mood sleep steps health`. The agent appends; the phone

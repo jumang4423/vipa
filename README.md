@@ -33,7 +33,11 @@ VIPA_NGROK=1 ./install.sh    # 外からも使う
 4. `8099` が他プロセスに使われていたら `8098` に逃がす（`~/.hermes/.env` の `VIPA_LISTEN`）。承認（ペアリング）は不要にする（`VIPA_ALLOW_ALL_USERS=1`）
 5. gateway を再起動し、`/api/health` が返るまで最大40秒待つ。**再起動は切り離して仕掛ける**（Hermes のセッションの中から実行されると、その場で再起動するとセッションごと落ちるため）。結果は `/tmp/vipa-install.txt` に `ok` か失敗ログが出る
 6. 端末が USB で挿さっていれば、APK を入れて接続先を書いて起動
-7. `VIPA_NGROK=1` なら ngrok を張り、**その URL** を端末に書く
+7. `VIPA_NGROK=1` なら ngrok を張り、**その URL** を端末に書く。固定 URL を使うなら `~/.hermes/.env` に1行（ngrok の dev domain）。無いと起動のたびに URL が変わる。
+
+```
+VIPA_NGROK_URL=your-name.ngrok-free.dev
+```
 
 最後に **`NEXT:` を1行だけ**出す。エージェントはそれをそのまま伝えればいい。
 

@@ -142,8 +142,14 @@ if [ "${VIPA_NGROK:-0}" = "1" ]; then
     say "ngrok が無い。LAN の URL のまま進む"
   else
     NGLOG="${TMPDIR:-/tmp}/vipa-ngrok.log"
+    # 固定 URL（ngrok の dev domain）があれば使う。無ければ毎回変わる URL。
+    NGURL="${VIPA_NGROK_URL:-$(grep -m1 '^VIPA_NGROK_URL=' "$ENV" 2>/dev/null | cut -d= -f2- || true)}"
     pkill -f "ngrok http .*$PORT" 2>/dev/null || true
-    nohup ngrok http "$PORT" --log=stdout > "$NGLOG" 2>&1 &
+    if [ -n "${NGURL:-}" ]; then
+      nohup ngrok http --url="$NGURL" "$PORT" --log=stdout > "$NGLOG" 2>&1 &
+    else
+      nohup ngrok http "$PORT" --log=stdout > "$NGLOG" 2>&1 &
+    fi
     for _ in $(seq 1 20); do
       NGTUNNEL=$(curl -s -m 2 http://127.0.0.1:4040/api/tunnels 2>/dev/null \
           | python3 -c 'import json,sys; t=json.load(sys.stdin)["tunnels"]; print([x["public_url"] for x in t if x["public_url"].startswith("https")][0])' 2>/dev/null || true)

@@ -39,6 +39,8 @@ public class MainActivity extends Activity {
     private final String[] skLabels = {"Reply", "", "\u2193", ""};
 
     public static volatile boolean visible = false;
+    private boolean menuOpen = false;
+    private long lastMenuKey = 0L;
 
     private MediaRecorderHolder rec = new MediaRecorderHolder();
 
@@ -296,12 +298,15 @@ public class MainActivity extends Activity {
             int c = e.getKeyCode();
             Log.i(TAG, "KEY " + c + " " + KeyEvent.keyCodeToString(c));
             if (c == KeyEvent.KEYCODE_DPAD_UP) {
+                if (menuOpen) { web.loadUrl("javascript:menuMove(-1)"); return true; }
                 web.loadUrl("javascript:sk(-" + dip(72) + ")"); return true;
             }
             if (c == KeyEvent.KEYCODE_DPAD_DOWN) {
+                if (menuOpen) { web.loadUrl("javascript:menuMove(1)"); return true; }
                 web.loadUrl("javascript:sk(" + dip(72) + ")"); return true;
             }
             if (c == KeyEvent.KEYCODE_DPAD_CENTER) {
+                if (menuOpen) { menuOpen = false; web.loadUrl("javascript:menuSelect()"); return true; }
                 web.loadUrl("javascript:nextPage()"); return true;
             }
             if (c == KeyEvent.KEYCODE_DPAD_LEFT) {
@@ -313,9 +318,16 @@ public class MainActivity extends Activity {
             if (c == KeyEvent.KEYCODE_F1) {          // top-left soft key
                 toggleVoice(); return true;
             }
-            if (c == KeyEvent.KEYCODE_F2 || c == KeyEvent.KEYCODE_F3
-                    || c == KeyEvent.KEYCODE_F4
-                    || c == KeyEvent.KEYCODE_BACK) {          // lower keys: jump to the end
+            if (c == KeyEvent.KEYCODE_F2 || c == KeyEvent.KEYCODE_F3 || c == KeyEvent.KEYCODE_F4) {  // menu
+                // this key emits F3 immediately followed by F4; treat the pair as one press
+                long now = System.currentTimeMillis();
+                if (now - lastMenuKey < 400L) return true;
+                lastMenuKey = now;
+                menuOpen = !menuOpen;
+                web.loadUrl(menuOpen ? "javascript:showMenu()" : "javascript:hideMenu()");
+                return true;
+            }
+            if (c == KeyEvent.KEYCODE_F2 || c == KeyEvent.KEYCODE_BACK) {          // lower keys: jump to the end
                 web.loadUrl("javascript:bottom()"); return true;
             }
             Log.i(TAG, "DKEY " + c + " " + KeyEvent.keyCodeToString(c));

@@ -49,6 +49,15 @@
     align-items:center}
   .typing .t{font-size:12px;color:#8d8d8d;margin-left:9px}
 
+  /* menu overlay: driven by the D-pad, no touch */
+  .menu{position:fixed;left:0;right:0;top:0;bottom:0;background:rgba(0,0,0,.86);
+    display:none;padding:70px 26px}
+  .menu.on{display:block}
+  .menu .it{padding:12px 14px;margin:0 0 8px;border-radius:12px;font-size:16px;
+    color:#dcdcdc;border:1px solid #2a2a2a;background:#101010}
+  .menu .it.sel{background:#f1f1f1;color:#0d0d0d;border-color:#f1f1f1}
+  .menu .hint{margin-top:18px;font-size:11px;color:#6f6f6f;letter-spacing:.08em}
+
   /* recording: a live bar meter on the user side */
   .rec{display:none;-webkit-align-self:flex-end;align-self:flex-end;
     margin:0 0 11px;padding:10px 14px;border-radius:16px;
@@ -93,6 +102,13 @@
 <body>
 
   <img class="hd" src="header.png" alt="">
+
+  <div class="menu" id="menu">
+    <div class="it" data-action="new">New session</div>
+    <div class="it" data-action="clear">Clear screen</div>
+    <div class="it" data-action="reload">Reload</div>
+    <div class="hint">&#9650;&#9660; move &nbsp; center select &nbsp; Menu close</div>
+  </div>
 
   <div class="thread" id="thread">
     <div class="rec" id="rec">
@@ -262,6 +278,49 @@ function poll() {
     showTyping('Offline');
   };
   x.send();
+}
+
+/* ---------- menu (opened from the right soft key) ---------- */
+var menu = document.getElementById('menu');
+var menuIdx = 0;
+
+function menuItems() { return menu.querySelectorAll('.it'); }
+
+function menuPaint() {
+  var items = menuItems();
+  for (var i = 0; i < items.length; i++) {
+    items[i].className = 'it' + (i === menuIdx ? ' sel' : '');
+  }
+}
+
+function showMenu() {
+  menu.className = 'menu on';
+  menuIdx = 0;
+  menuPaint();
+}
+
+function hideMenu() { menu.className = 'menu'; }
+
+function menuMove(d) {
+  var n = menuItems().length;
+  menuIdx = (menuIdx + d + n) % n;
+  menuPaint();
+}
+
+function post(path, body) {
+  var x = new XMLHttpRequest();
+  x.open('POST', API + path, true);
+  x.setRequestHeader('Content-Type', 'application/json');
+  x.send(body ? JSON.stringify(body) : '{}');
+}
+
+function menuSelect() {
+  var items = menuItems();
+  var action = items[menuIdx] ? items[menuIdx].getAttribute('data-action') : 'reload';
+  hideMenu();
+  if (action === 'clear') { post('/api/reset'); setTimeout(function () { location.reload(); }, 300); }
+  else if (action === 'new') { post('/api/newsession'); setTimeout(function () { location.reload(); }, 600); }
+  else { location.reload(); }
 }
 
 /* ---------- called from Java ---------- */

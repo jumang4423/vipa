@@ -8,6 +8,7 @@ No UI, no extra server, no third-party dependencies: stdlib only.
       POST /api/voice        audio -> Groq transcription -> agent
       POST /api/in           {"text": "..."} -> agent
       GET  /api/out?since=N  new messages
+      POST /api/push         {"text": "..."} straight to the phone, no agent
       POST /api/reset        empty the outbox
       GET  /api/health
 
@@ -290,6 +291,20 @@ class VipaAdapter(BasePlatformAdapter):
                     self._send(202, {"ok": True})
                     return
 
+                if path == "/api/push":
+                    raw = self._body()
+                    try:
+                        text = (json.loads(raw.decode() or "{}").get("text") or "").strip()
+                    except Exception:
+                        self._send(400, {"error": "bad json"})
+                        return
+                    if not text:
+                        self._send(400, {"error": "empty"})
+                        return
+                    adapter._push("assistant", text)
+                    self._send(202, {"ok": True})
+                    return
+
                 if path == "/api/reset":
                     adapter._reset()
                     self._send(200, {"ok": True})
@@ -341,6 +356,42 @@ def platform_hint() -> str:
                     "Answer in one short line. No emoji. Only what is actually owed today.")
 
 
+def _endpoint(config, path):
+    listen = (extra_or_secret(config.extra if config else {}, "listen", "VIPA_LISTEN")
+              or "0.0.0.0:8099")
+    _, _, port = listen.partition(":")
+    return "http://127.0.0.1:%s%s" % (port or "8099", path)
+
+
+async def _standalone_send(pconfig, chat_id, message, *, thread_id=None, media_files=None,
+                           force_document=False):
+    """Out-of-process delivery (standalone_sender_fn): cron, `hermes send`, scripts.
+
+    No adapter, no agent — the plugin's own HTTP port takes the line and the phone picks
+    it up on its next poll.
+    """
+    import urllib.request
+
+    text = (message or "").strip()
+    if not text:
+        return {"success": False, "error": "empty message"}
+
+    def post():
+        body = json.dumps({"text": text}, ensure_ascii=False).encode()
+        req = urllib.request.Request(_endpoint(pconfig, "/api/push"), data=body,
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.status
+
+    try:
+        status = await asyncio.get_event_loop().run_in_executor(None, post)
+        if status >= 400:
+            return {"success": False, "error": "vipa push %s" % status}
+    except Exception as e:
+        return {"success": False, "error": "vipa push failed: %s" % e}
+    return {"success": True, "platform": "vipa", "chat_id": chat_id or "vipa"}
+
+
 def check_requirements() -> bool:
     return True
 
@@ -358,11 +409,15 @@ def register(ctx):
         platform_hint=_hint,
     )
     # One phone, at home. No pairing prompt.
+    kwargs["standalone_sender_fn"] = _standalone_send
+    # Cron: `deliver=vipa` resolves the home channel from this env var.
+    kwargs["cron_deliver_env_var"] = "VIPA_HOME_CHANNEL"
     kwargs["allowed_users_env"] = "VIPA_ALLOWED_USERS"
     kwargs["allow_all_env"] = "VIPA_ALLOW_ALL_USERS"
     try:
         ctx.register_platform(**kwargs)
     except TypeError:
-        for key in ("allowed_users_env", "allow_all_env"):
+        for key in ("allowed_users_env", "allow_all_env", "standalone_sender_fn",
+                    "cron_deliver_env_var"):
             kwargs.pop(key, None)
         ctx.register_platform(**kwargs)

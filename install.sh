@@ -127,6 +127,16 @@ FRESH=1
 if vipa_up "$PORT" && [ "$NEW_SHA" = "$OLD_SHA" ]; then
   FRESH=0
   say "vipa already answers on $PORT (same code, no restart)"
+elif vipa_up "$PORT"; then
+  FRESH=0
+  say "vipa answers on $PORT (code changed; the gateway may pick it up on its own)"
+else
+  # Give the running gateway a moment: it re-wires plugins when they are enabled,
+  # and sometimes connects the new platform without a restart.
+  for _ in $(seq 1 10); do
+    vipa_up "$PORT" && { FRESH=0; say "gateway connected vipa on $PORT by itself"; break; }
+    sleep 1
+  done
 fi
 
 # ---------------------------------------------------------------- 5. url
@@ -218,7 +228,9 @@ if [ "${VIPA_NGROK:-0}" = "1" ] && [ -z "${NGTUNNEL:-}" ]; then
 fi
 
 if [ "$FRESH" = "1" ]; then
-  printf '  NEED: run ./restart.sh from a shell outside this agent session. The plugin only loads\n'
-  printf '        when the gateway starts, and Hermes refuses that from inside a session.\n'
+  printf '  NEED: restart the gateway, or the plugin will not load. Hermes will not let me do it\n'
+  printf '        from inside this session. Copy this line into a normal terminal:\n'
+  printf '\n            cd %s && ./restart.sh\n\n' "$REPO"
+  printf '        It restarts in 2s and writes ok to /tmp/vipa-restart.txt.\n'
 fi
 printf '\n  health: curl http://127.0.0.1:%s/api/health\n\n' "$PORT"

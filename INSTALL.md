@@ -39,6 +39,11 @@ agent run `install.sh` at all.
 It restarts through launchd when the plist exists, else through the CLI, then waits for
 `/api/health` and writes `ok` or the tail of the gateway log.
 
+**Do not work around the guard.** `osascript ... Terminal`, `at`, `launchctl` from inside the
+session, backgrounding it — all of it either gets blocked as well or kills the turn that is
+trying it. The guard exists because the restart kills whatever is running in the gateway,
+including the agent. Report the one line and stop.
+
 A restart only happens when the plugin code actually changed (`.vipa-adapter.sha`);
 re-running the installer is otherwise a no-op for the gateway.
 

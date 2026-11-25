@@ -27,6 +27,17 @@ What is left is what a life actually owes: **the minimum of your responsibilitie
 society**. A deadline. A person waiting for an answer. A commitment you made. A change in
 the world that alters today's plan. That, and nothing else.
 
+## The body is the signal
+
+This exists to keep the senses open, not to produce data. Weight, what was eaten, how the
+night went, where the mood sits: these are the few signals a body actually gives, and they
+are easy to lose because noticing them costs one small step. The health screen exists to make
+that step smaller than ignoring it — say it once, it is kept, and the shape over weeks becomes
+visible without becoming a scoreboard.
+
+Nothing there is compared with anyone. It is the body reporting itself, to the person whose
+body it is.
+
 ## What it is for
 
 - **real sensation** — instead of the story about it

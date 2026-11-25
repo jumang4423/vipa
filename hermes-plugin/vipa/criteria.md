@@ -38,6 +38,12 @@ Counts are the usual shape of this, not the principle itself: "yesterday +39 fol
 refused because it is a scoreboard, not because a number appears in it. A deadline is a
 number too, and it passes.
 
+## The one exception: the body
+
+The user's own record of the body passes — weight, meals and their calories, alcohol, sleep,
+mood, steps. It is not a comparison with other people; it is the body reporting itself, and
+the numbers are what make the shape visible over weeks. Record it without arguing.
+
 ## When a job would break this
 
 The user may register any job they like. Registering is fine. **Delivering it to vipa is

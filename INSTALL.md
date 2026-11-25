@@ -83,6 +83,27 @@ restart the gateway; nothing is generated.
 The screen shows the item you are in, a NOW chip on it, a "now" dot on the axis, and scrolls
 like the message screen. There is no footer text.
 
+## Recording the body
+
+Third screen (press Switch twice). One JSON per day, under `~/.hermes/vipa/days/YYYY-MM-DD.json`.
+
+```
+GET  /api/day?date=YYYY-MM-DD     {date, entries:[{ts, kind, text?, kcal?, kg?}]}
+POST /api/day                     append one entry
+GET  /api/days?n=30               [{date, kg}] — the weight graph
+```
+
+`kind` is one of `weight meal alcohol mood sleep steps health`. The agent appends; the phone
+only reads. Estimate calories when the user describes a meal, and write it in the same turn:
+
+```bash
+curl -s -X POST http://127.0.0.1:8099/api/day -H 'Content-Type: application/json' \
+  -d '{"kind":"meal","kcal":560,"text":"rice 0.5 go, tofu, miso soup"}'
+```
+
+A body record is not a scoreboard: `criteria.md` allows numbers here because they are the
+user's own body reporting itself, not a comparison with anyone.
+
 ## How the rules reach the agent
 
 `philosophy.md` and `criteria.md` are read by `register()` and handed to Hermes as

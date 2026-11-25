@@ -9,6 +9,9 @@ No UI, no extra server, no third-party dependencies: stdlib only.
       POST /api/in           {"text": "..."} -> agent
       GET  /api/out?since=N  new messages
       GET  /api/schedule     the day, from schedule.json
+      GET  /api/day          the body's record for one day
+      POST /api/day          append weight|meal|alcohol|mood|sleep|steps|health
+      GET  /api/days?n=30    weights over time, for the graph
       POST /api/push         {"text": "..."} straight to the phone, no agent
       POST /api/reset        empty the outbox
       GET  /api/health
@@ -21,6 +24,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -213,6 +217,72 @@ class VipaAdapter(BasePlatformAdapter):
             rows = [m for m in self._out if m["seq"] > since]
             return {"messages": rows[-40:], "last": self._seq}
 
+    # ---------------------------------------------------------------- the body
+
+    @staticmethod
+    def _day_path(day=None):
+        import datetime
+        day = day or datetime.date.today().isoformat()
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day or ""):
+            day = datetime.date.today().isoformat()
+        return os.path.join(DAYS, day + ".json"), day
+
+    def _day(self, day=None):
+        path, day = self._day_path(day)
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+        entries = data.get("entries") or []
+        entries.sort(key=lambda e: e.get("ts") or "")
+        return {"date": day, "entries": entries}
+
+    def _log(self, kind, text="", kcal=None, kg=None, ts=None):
+        import datetime
+        now = datetime.datetime.now()
+        ts = ts or now.strftime("%H:%M")
+        if not re.fullmatch(r"\d{1,2}:\d{2}", ts or ""):
+            ts = now.strftime("%H:%M")
+        ts = "%02d:%s" % (int(ts.split(":")[0]), ts.split(":")[1])
+        entry = {"ts": ts, "kind": kind}
+        if text:
+            entry["text"] = text
+        if kcal not in (None, ""):
+            try:
+                entry["kcal"] = int(round(float(kcal)))
+            except Exception:
+                pass
+        if kg not in (None, ""):
+            try:
+                entry["kg"] = round(float(kg), 1)
+            except Exception:
+                pass
+        os.makedirs(DAYS, exist_ok=True)
+        path, day = self._day_path()
+        day_data = self._day(day)
+        day_data["entries"].append(entry)
+        day_data["entries"].sort(key=lambda e: e.get("ts") or "")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(day_data, f, ensure_ascii=False, indent=2)
+        return entry
+
+    def _weights(self, n=30):
+        import datetime
+        out = []
+        try:
+            names = sorted(os.listdir(DAYS))[-int(n):]
+        except Exception:
+            return out
+        for name in names:
+            if not name.endswith(".json"):
+                continue
+            day = self._day(name[:-5])
+            kgs = [e["kg"] for e in day["entries"] if e.get("kind") == "weight" and e.get("kg")]
+            if kgs:
+                out.append({"date": day["date"], "kg": kgs[-1]})
+        return out
+
     def _schedule(self):
         """The day as the phone shows it. Edit schedule.json; nothing else to touch."""
         try:
@@ -337,6 +407,23 @@ class VipaAdapter(BasePlatformAdapter):
                 if path == "/api/health":
                     self._send(200, {"ok": True, "seq": adapter._seq,
                                      "stt": bool(adapter.groq_key)})
+                elif path == "/api/day":
+                    day = None
+                    for kv in query.split("&"):
+                        k, _, v = kv.partition("=")
+                        if k == "date":
+                            day = v
+                    self._send(200, adapter._day(day))
+                elif path == "/api/days":
+                    n = 30
+                    for kv in query.split("&"):
+                        k, _, v = kv.partition("=")
+                        if k == "n":
+                            try:
+                                n = int(v)
+                            except ValueError:
+                                pass
+                    self._send(200, {"weights": adapter._weights(n)})
                 elif path == "/api/schedule":
                     self._send(200, adapter._schedule())
                 elif path == "/api/out":
@@ -387,6 +474,22 @@ class VipaAdapter(BasePlatformAdapter):
                     self._send(202, {"ok": True})
                     return
 
+                if path == "/api/day":
+                    raw = self._body()
+                    try:
+                        body = json.loads(raw.decode() or "{}")
+                    except Exception:
+                        self._send(400, {"error": "bad json"})
+                        return
+                    kind = (body.get("kind") or "").strip()
+                    if kind not in ("weight", "meal", "alcohol", "mood", "sleep", "steps", "health"):
+                        self._send(400, {"error": "kind must be weight|meal|alcohol|mood|sleep|steps|health"})
+                        return
+                    entry = adapter._log(kind, (body.get("text") or "").strip(),
+                                         body.get("kcal"), body.get("kg"), body.get("ts"))
+                    self._send(200, {"ok": True, "entry": entry})
+                    return
+
                 if path == "/api/reset":
                     adapter._reset()
                     self._send(200, {"ok": True})
@@ -420,6 +523,7 @@ class VipaAdapter(BasePlatformAdapter):
 
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+DAYS = os.path.join(os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes")), "vipa", "days")
 
 
 def _ssl_context():

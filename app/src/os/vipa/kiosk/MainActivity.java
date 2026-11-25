@@ -305,10 +305,10 @@ public class MainActivity extends Activity {
                 web.loadUrl("javascript:nextPage()"); return true;
             }
             if (c == KeyEvent.KEYCODE_DPAD_LEFT) {
-                web.loadUrl("javascript:sk(-" + dip(280) + ")"); return true;
+                web.loadUrl("javascript:navLR(-1)"); return true;
             }
             if (c == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                web.loadUrl("javascript:sk(" + dip(280) + ")"); return true;
+                web.loadUrl("javascript:navLR(1)"); return true;
             }
             if (c == KeyEvent.KEYCODE_F1) {          // top-left soft key
                 toggleVoice(); return true;

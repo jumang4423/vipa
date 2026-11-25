@@ -4,8 +4,11 @@ The phone is a KYF39 because it can do very little and its battery lasts about t
 Nothing on it can ask to be looked at.
 
 What reaches it is not what is interesting. It is what society actually requires you to do
-today: a deadline, an appointment, a person waiting for an answer. Everything else stays
-at home, and by default nothing is sent.
+today: a deadline, an appointment, a person waiting for an answer. Everything else stays at
+home, and by default nothing is sent.
+
+The test is one question, and `criteria.md` is that question written out: does this ask the
+user to do something in the world, or does it ask them to look at the phone?
 
 When you write to this screen:
 

@@ -17,12 +17,12 @@
   .hd span{font-size:10px;letter-spacing:.24em;color:#6f6f6f}
 
   .thread{-webkit-box-flex:1;flex:1;overflow-y:auto;overflow-x:hidden;
-    padding:14px 0 12px;display:-webkit-box;display:flex;
+    padding:14px 0 112px;display:-webkit-box;display:flex;
     -webkit-box-orient:vertical;flex-direction:column}
 
   .b{max-width:82%;padding:9px 12px;border-radius:16px;
      font-size:15px;line-height:1.5;word-wrap:break-word;
-     margin:0 12px 11px}
+     margin:0 0 11px}
   .ai{-webkit-align-self:flex-start;align-self:flex-start;
       background:#131313;color:#ededed;border:1px solid #222;
       border-bottom-left-radius:4px}
@@ -43,7 +43,7 @@
     white-space:pre-wrap;word-break:break-word}
 
   .typing{display:none;-webkit-align-self:flex-start;align-self:flex-start;
-    margin:0 12px 11px;padding:10px 13px;border-radius:16px;
+    margin:0 0 11px;padding:10px 13px;border-radius:16px;
     border-bottom-left-radius:4px;background:#131313;border:1px solid #222}
   .typing.on{display:-webkit-box;display:flex;-webkit-box-align:center;
     align-items:center}
@@ -146,7 +146,25 @@ function md(src) {
 }
 
 /* ---------- view ---------- */
-function bottom() { thread.scrollTop = thread.scrollHeight; }
+/* スクロールする箱は1つとは限らない（WebView の版で flex の高さが決まらない）。
+   thread が伸びている場合は document 側が動くので、両方を見る。 */
+function threadScrolls() { return thread.scrollHeight > thread.clientHeight + 4; }
+
+function bottom() {
+  if (threadScrolls()) thread.scrollTop = thread.scrollHeight;
+  else window.scrollTo(0, document.body.scrollHeight);
+}
+
+function scrollByPx(dy) {
+  if (threadScrolls()) thread.scrollTop = thread.scrollTop + dy;
+  else window.scrollBy(0, dy);
+}
+
+function showError(text) {
+  hideTyping();
+  addBubble('assistant', text);
+  bottom();
+}
 
 function addBubble(role, text) {
   var el = document.createElement('div');
@@ -196,12 +214,16 @@ function poll() {
 }
 
 /* ---------- Java から呼ばれる ---------- */
-function sk(dy) { thread.scrollTop = thread.scrollTop + dy; }
+function sk(dy) { scrollByPx(dy); }
+
 function nextPage() {
-  if (thread.scrollTop + thread.clientHeight >= thread.scrollHeight - 4) {
-    thread.scrollTop = 0;
+  var h = window.innerHeight;
+  if (threadScrolls()) {
+    if (thread.scrollTop + thread.clientHeight >= thread.scrollHeight - 4) thread.scrollTop = 0;
+    else thread.scrollTop = thread.scrollTop + thread.clientHeight * 0.9;
   } else {
-    thread.scrollTop = thread.scrollTop + thread.clientHeight * 0.9;
+    if (window.pageYOffset + h >= document.body.scrollHeight - 4) window.scrollTo(0, 0);
+    else window.scrollTo(0, window.pageYOffset + h * 0.9);
   }
 }
 

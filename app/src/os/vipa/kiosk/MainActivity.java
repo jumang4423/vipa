@@ -363,6 +363,7 @@ public class MainActivity extends Activity {
     private void upload(File f) {
         HttpURLConnection c = null;
         boolean ok = false;
+        String why = "";
         try {
             byte[] audio = readBytes(f);
             c = (HttpURLConnection) new URL(SERVER + "/api/voice").openConnection();
@@ -381,15 +382,28 @@ public class MainActivity extends Activity {
             String body = read(code >= 400 ? c.getErrorStream() : c.getInputStream());
             Log.i(TAG, "voice http=" + code + " " + body);
             ok = code < 400;
+            if (code == 503) why = "音声は未設定（GROQ_API_KEY が無い）";
+            else if (!ok) why = "音声を送れない: " + body;
         } catch (Throwable t) {
             Log.i(TAG, "voice FAIL " + t);
         } finally {
             if (c != null) c.disconnect();
             if (!ok) {
+                final String msg = why;
                 handler.post(new Runnable() {
-                    public void run() { web.loadUrl(home); }
+                    public void run() {
+                        web.loadUrl("javascript:showError(" + quote(msg) + ")");
+                    }
                 });
             }
+        }
+    }
+
+    private static String quote(String s) {
+        try {
+            return org.json.JSONObject.quote(s == null ? "" : s);
+        } catch (Throwable t) {
+            return "\"\"";
         }
     }
 

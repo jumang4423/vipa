@@ -202,6 +202,7 @@ class VipaAdapter(BasePlatformAdapter):
         req = urllib.request.Request(
             GROQ_URL, data=head + audio + tail,
             headers={"Authorization": "Bearer " + self.groq_key,
+                     "User-Agent": "vipa/1.0",   # これが無いと Cloudflare が 403 で弾く
                      "Content-Type": "multipart/form-data; boundary=" + boundary})
         with urllib.request.urlopen(req, timeout=90, context=ctx) as r:
             return json.load(r).get("text", "").strip()

@@ -54,16 +54,27 @@ python3 - "$CFG" <<'PY'
 import re, sys
 p = sys.argv[1]
 s = open(p, encoding="utf-8").read()
+def ensure_notice_off(text):
+    # 「♻️ Gateway online」を端末に出さない
+    if re.search(r'^    gateway_restart_notification: false', text, re.M):
+        return text
+    if re.search(r'^  vipa:[ \t]*\n    enabled: true[ \t]*$', text, re.M):
+        return re.sub(r'^(  vipa:[ \t]*\n    enabled: true[ \t]*)$',
+                      r'\1\n    gateway_restart_notification: false', text, count=1, flags=re.M)
+    return text
+
 if re.search(r'^[ \t]+vipa:[ \t]*$', s, re.M):
+    s = ensure_notice_off(s)
+    open(p, "w", encoding="utf-8").write(s)
     print("  config: vipa は設定済み")
 elif re.search(r'^platforms:[ \t]*$', s, re.M):
-    s = re.sub(r'^platforms:[ \t]*$', "platforms:\n  vipa:\n    enabled: true", s, count=1, flags=re.M)
+    s = re.sub(r'^platforms:[ \t]*$', "platforms:\n  vipa:\n    enabled: true\n    gateway_restart_notification: false", s, count=1, flags=re.M)
     open(p, "w", encoding="utf-8").write(s)
     print("  config: platforms の下に vipa を挿入")
 else:
     if not s.endswith("\n"):
         s += "\n"
-    s += "\nplatforms:\n  vipa:\n    enabled: true\n"
+    s += "\nplatforms:\n  vipa:\n    enabled: true\n    gateway_restart_notification: false\n"
     open(p, "w", encoding="utf-8").write(s)
     print("  config: platforms を追記")
 PY

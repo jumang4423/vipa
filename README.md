@@ -41,7 +41,7 @@ the page. Thread → routine → health → thread.
   and nothing else.
 - **the day** — the routine from `hermes-plugin/vipa/schedule.json`: the item you are in,
   a NOW chip on it, a dot on the axis where the clock is, scrolling like the thread.
-- **the body** — today only: weight, meals with calories, alcohol, mood, sleep, steps.
+- **the body** — today only: weight, meals with calories, mood, sleep, steps.
   Say it once and it is kept; ask the agent about any past day and it reads the file. The
   screen itself never shows yesterday: the point is to be here now, not to browse a record.
 

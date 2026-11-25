@@ -93,7 +93,7 @@ POST /api/day                     append one entry
 GET  /api/days?n=30               [{date, kg}] — the weight graph
 ```
 
-`kind` is one of `weight meal alcohol mood sleep steps health`. The agent appends; the phone
+`kind` is one of `weight meal mood sleep steps health`. The agent appends; the phone
 only reads. Estimate calories when the user describes a meal, and write it in the same turn:
 
 ```bash

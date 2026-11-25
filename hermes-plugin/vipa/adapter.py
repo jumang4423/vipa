@@ -10,7 +10,7 @@ No UI, no extra server, no third-party dependencies: stdlib only.
       GET  /api/out?since=N  new messages
       GET  /api/schedule     the day, from schedule.json
       GET  /api/day          the body's record for one day
-      POST /api/day          append weight|meal|alcohol|mood|sleep|steps|health
+      POST /api/day          append weight|meal|mood|sleep|steps|health
       GET  /api/days?n=30    weights over time, for the graph
       POST /api/push         {"text": "..."} straight to the phone, no agent
       POST /api/reset        empty the outbox
@@ -91,7 +91,7 @@ CORS = {
 }
 
 
-KINDS = ("weight", "meal", "alcohol", "mood", "sleep", "steps", "health")
+KINDS = ("weight", "meal", "mood", "sleep", "steps", "health")
 
 
 def _day_path(day=None):
@@ -530,8 +530,8 @@ class VipaAdapter(BasePlatformAdapter):
                         self._send(400, {"error": "bad json"})
                         return
                     kind = (body.get("kind") or "").strip()
-                    if kind not in ("weight", "meal", "alcohol", "mood", "sleep", "steps", "health"):
-                        self._send(400, {"error": "kind must be weight|meal|alcohol|mood|sleep|steps|health"})
+                    if kind not in KINDS:
+                        self._send(400, {"error": "kind must be one of " + "|".join(KINDS)})
                         return
                     try:
                         entry = log_entry(kind, (body.get("text") or "").strip(),
@@ -711,7 +711,7 @@ def register(ctx):
         schema={
             "name": "vipa_log",
             "description": ("Record what the user's body reports today: weight, a meal with "
-                            "estimated kcal, alcohol, mood, sleep, steps, or another health note. "
+                            "estimated kcal, mood, sleep, steps, or another health note. "
                             "Call it in the same turn the user tells you; do not promise it."),
             "parameters": {
                 "type": "object",
@@ -735,7 +735,7 @@ def register(ctx):
         schema={
             "name": "vipa_day",
             "description": ("Read what the user's body recorded on a day: weight, meals with kcal, "
-                            "alcohol, mood, sleep, steps. Use it whenever the user asks about "
+                            "mood, sleep, steps. Use it whenever the user asks about "
                             "yesterday or any past day, or wants a summary over time."),
             "parameters": {
                 "type": "object",

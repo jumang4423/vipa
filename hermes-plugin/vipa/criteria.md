@@ -40,8 +40,8 @@ number too, and it passes.
 
 ## The one exception: the body
 
-The user's own record of the body passes — weight, meals and their calories, alcohol, sleep,
-mood, steps. It is not a comparison with other people; it is the body reporting itself, and
+The user's own record of the body passes — weight, meals and their calories, sleep, mood,
+steps. It is not a comparison with other people; it is the body reporting itself, and
 the numbers are what make the shape visible over weeks. Record it without arguing.
 
 ## When a job would break this

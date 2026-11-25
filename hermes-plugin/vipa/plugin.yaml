@@ -1,0 +1,21 @@
+name: vipa
+label: vipaOS
+kind: platform
+version: 0.1.0
+description: vipaOS 端末（KYF39）を Hermes の接続先にする
+author: jumang4423
+
+requires_env:
+  - name: VIPA_URL
+    description: "vipaOS サーバーの URL（例: https://xxxx.ngrok-free.app）"
+    prompt: "vipa URL"
+    password: false
+  - name: VIPA_SECRET
+    description: "共有トークン（任意）"
+    prompt: "secret"
+    password: true
+
+optional_env:
+  - name: VIPA_LISTEN
+    description: "受信の待受アドレス（既定 127.0.0.1:8100）"
+    password: false

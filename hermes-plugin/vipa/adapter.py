@@ -35,9 +35,9 @@ GROQ_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 STT_MODEL = "whisper-large-v3-turbo"
 MAX_OUT = 200
 MAX_BODY = 32 * 1024 * 1024
-# One short line is the design, so it is enforced rather than requested. 480px wide at
-# 26 characters a line: 80 characters is three lines and already the ceiling.
-MAX_CHARS = int(os.environ.get("VIPA_MAX_CHARS") or 96)
+# No truncation by default. Short answers are the agent's job (platform_hint says so);
+# the transport must never cut a sentence. Set VIPA_MAX_CHARS to a number to re-enable.
+MAX_CHARS = int(os.environ.get("VIPA_MAX_CHARS") or 0)
 
 
 
@@ -48,8 +48,11 @@ def condense(text, limit=None):
     when even that fails does it hard-cut, and then it marks the cut.
     """
     import re
-    limit = limit or MAX_CHARS
-    t = re.sub(r"```.*?```", " ", text or "", flags=re.S)
+    limit = MAX_CHARS if limit is None else limit
+    t = (text or "").strip()
+    if not limit or len(t) <= limit:
+        return re.sub(r"\n{3,}", "\n\n", t)
+    t = re.sub(r"```.*?```", " ", t, flags=re.S)
     t = re.sub(r"(?m)^\s*(?:[-*•]|\d+[.)])\s+", "", t)
     t = re.sub(r"[*_`#>|]+", "", t)
     t = re.sub(r"\s+", " ", t).strip()

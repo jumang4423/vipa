@@ -70,7 +70,7 @@ carries the new rules.
 
 ## What the phone will never show
 
-- more than about four lines: replies are cut at 96 characters, on a sentence boundary, never mid-sentence
+- a sentence cut in half — long answers are shown in full and scroll
 - a count, a rank, a streak, a score
 - a notice about itself
 

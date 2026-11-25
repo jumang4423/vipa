@@ -356,6 +356,27 @@ class VipaAdapter(BasePlatformAdapter):
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+def _ssl_context():
+    """Find a CA bundle. Works where certifi is absent (Hermes' own Python has none)."""
+    import ssl
+    paths = []
+    try:
+        import certifi
+        paths.append(certifi.where())
+    except Exception:
+        pass
+    paths += ["/etc/ssl/cert.pem",
+              "/etc/ssl/certs/ca-certificates.crt",
+              "/usr/local/etc/openssl/cert.pem"]
+    for path in paths:
+        if path and os.path.exists(path):
+            try:
+                return ssl.create_default_context(cafile=path)
+            except Exception:
+                pass
+    return ssl.create_default_context()
+
+
 def _read(name):
     try:
         with open(os.path.join(HERE, name), encoding="utf-8") as f:

@@ -1,17 +1,36 @@
 # vipa
 
-Turn a plain flip phone (KYF39) into a terminal that **does nothing on its own**.
+A flip phone (KYF39) that carries no feed, no shop, no count — and an agent at home that
+does the reading for you.
 
 ## Why
 
-A smartphone is a door that opens onto everything. Every feed, every notification, every
-shop, every argument — all of it arrives whether you asked or not.
+A capable tool is not a problem because you use it. It is a problem because it sits there
+*available*, and every time you see it you are quietly asked why you are not using it.
+Restrict it with software and you answer that question with willpower, every time, until
+you run out.
 
-vipa is the opposite. The phone shows one screen and nothing else. When you have nothing to
-say, it stays dark. The judgment about what deserves attention does not live in your pocket;
-it lives in the machine at home, where you can read it, edit it and turn it off.
+So the constraint is not on what the phone can do. It is on **what reaches it**, and on
+**how slowly it can be read**. The agent behind it is not limited; the door is one door,
+and the screen is 480×854 with four keys. Nothing here is a moral test. Look at it for an
+hour if you like.
+
+The work happens at home: the machine takes in the world and, by default, **drops it**.
+What survives is checked against your own writing — the criteria you wrote while calm —
+not against a model's opinion. Nothing is explained on the daily screen. No counts, no
+reasons, no badges. Reasons belong to the weekly audit.
+
+- let the AI drop things; do not let it answer for you
+- let the human notice; do not let it decide
+- keep what was dropped; show it once a week
 
 The phone is a door, not a world.
+
+## Honest state
+
+This build is still a chat: you can ask it anything and it answers. The judgment layer
+(`criteria`, dropping, the weekly audit) is what the design is about and is **not in this
+repository yet**. What is here works: one screen, voice in, replies back, one narrow door.
 
 ## Requirements
 

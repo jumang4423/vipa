@@ -145,6 +145,49 @@ Known traps:
 - free URLs change on every restart. A free "dev domain" is stable: put it in
   `VIPA_NGROK_URL` and pass `--url=` (the installer does this for you).
 
+## Keep ngrok alive
+
+Do **not** start the tunnel from a shell that belongs to the agent or the gateway. Whatever
+the gateway starts dies with it — that is what makes the phone go offline the moment the
+gateway restarts, with `ERR_NGROK_3200` on the phone.
+
+On macOS let launchd own it:
+
+```xml
+<!-- ~/Library/LaunchAgents/ai.vipa.ngrok.plist -->
+<key>ProgramArguments</key>
+<array>
+  <string>/opt/homebrew/bin/ngrok</string>
+  <string>http</string>
+  <string>--url=YOUR-NAME.ngrok-free.dev</string>
+  <string>8099</string>
+</array>
+<key>RunAtLoad</key><true/>
+<key>KeepAlive</key><true/>
+```
+
+```bash
+launchctl load ~/Library/LaunchAgents/ai.vipa.ngrok.plist
+curl -s http://127.0.0.1:4040/api/tunnels | python3 -m json.tool | head
+```
+
+`install.sh` writes exactly this file when `VIPA_NGROK=1`, as long as `VIPA_NGROK_URL` is
+set. Notes worth remembering:
+
+- a free ngrok account has **one dev domain** (`something.ngrok-free.dev`) that is stable and
+  usable with `--url=`; `ERR_NGROK_313` only means you tried to pick your own *custom*
+  subdomain, which is a paid feature;
+- the tunnel dies with whatever process started it, and every fresh start without `--url=`
+  gets a new hostname — which silently strands the phone on the old one;
+- after changing the URL, write it to the phone:
+
+```bash
+printf 'https://YOUR-NAME.ngrok-free.dev\n' > /tmp/vipa.url
+adb push /tmp/vipa.url /sdcard/vipa.url
+adb shell am force-stop os.vipa.kiosk
+adb shell am start -n os.vipa.kiosk/.MainActivity
+```
+
 ## Known limits of the phone
 
 - Android 5.1, no GMS, no Play Services. Polling only.

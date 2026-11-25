@@ -149,10 +149,44 @@ if [ "${VIPA_NGROK:-0}" = "1" ]; then
   else
     NGLOG="${TMPDIR:-/tmp}/vipa-ngrok.log"
     NGURL="${VIPA_NGROK_URL:-$(grep -m1 '^VIPA_NGROK_URL=' "$ENV" 2>/dev/null | cut -d= -f2- || true)}"
+    # A tunnel started from here would be a child of the caller (often the gateway),
+    # and would die with it. launchd keeps it alive across restarts instead.
     NGTUNNEL="$(tunnel_url "$PORT")"
     if [ -n "${NGTUNNEL:-}" ]; then
       URL="$NGTUNNEL"
       say "ngrok already tunnelling $PORT -> $URL"
+    elif [ -n "${NGURL:-}" ] && [ "$(uname)" = "Darwin" ]; then
+      PLIST="$HOME/Library/LaunchAgents/ai.vipa.ngrok.plist"
+      mkdir -p "$(dirname "$PLIST")"
+      cat > "$PLIST" <<PLISTEOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>ai.vipa.ngrok</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$(command -v ngrok)</string>
+    <string>http</string>
+    <string>--url=$NGURL</string>
+    <string>$PORT</string>
+    <string>--log=stdout</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$H/logs/ngrok.log</string>
+  <key>StandardErrorPath</key><string>$H/logs/ngrok.log</string>
+</dict>
+</plist>
+PLISTEOF
+      launchctl unload "$PLIST" 2>/dev/null || true
+      launchctl load "$PLIST" 2>/dev/null || nohup ngrok http --url="$NGURL" "$PORT" --log=stdout > "$NGLOG" 2>&1 &
+      say "ngrok kept alive by launchd (ai.vipa.ngrok)"
+      for _ in $(seq 1 20); do
+        NGTUNNEL="$(tunnel_url "$PORT")"
+        [ -n "${NGTUNNEL:-}" ] && break
+        sleep 1
+      done
     elif [ -n "${NGURL:-}" ]; then
       nohup ngrok http --url="$NGURL" "$PORT" --log=stdout > "$NGLOG" 2>&1 &
     else

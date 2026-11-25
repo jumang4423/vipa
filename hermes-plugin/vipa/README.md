@@ -11,6 +11,8 @@
 | `POST /api/voice` | 録音を渡す（`audio/mp4`）→ Groq で文字起こし |
 | `GET /api/health` | 生死 |
 
+`adapter.py` は**標準ライブラリだけで動く**（追加の pip 不要）。
+
 `GET /api/out` は `{"messages":[{seq,role,text,ts}],"last":N}` を返す。`role` は `user` か `assistant`。
 端末は `last` を次の `since` に使う。
 

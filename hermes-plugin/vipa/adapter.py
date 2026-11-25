@@ -3,6 +3,7 @@ vipa: KYF39 端末を Hermes の口にする。
 
 受信 → handle_message()。送信 → 箱に積む（端末が5秒ごとに取りに来る）。
 UI も別サーバーも持たない。画面は APK の中。
+**標準ライブラリだけで動く**（aiohttp 等は使わない）。
 
     KYF39（アプリ）
       POST /api/voice        声（Groq で文字起こし）→ エージェント
@@ -19,9 +20,9 @@ import asyncio
 import json
 import logging
 import os
+import threading
 import time
-
-from aiohttp import web
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from gateway.config import Platform, PlatformConfig
 from gateway.platforms._shared import extra_or_secret
@@ -33,12 +34,35 @@ log = logging.getLogger(__name__)
 GROQ_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 STT_MODEL = "whisper-large-v3-turbo"
 MAX_OUT = 200
+MAX_BODY = 32 * 1024 * 1024
 
 CORS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type, X-Vipa-Secret",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 }
+
+
+
+def _ssl_context():
+    """CA バンドルを探す。certifi が無い環境（Hermes 同梱の Python など）でも通す。"""
+    import ssl
+    paths = []
+    try:
+        import certifi
+        paths.append(certifi.where())
+    except Exception:
+        pass
+    paths += ["/etc/ssl/cert.pem",
+              "/etc/ssl/certs/ca-certificates.crt",
+              "/usr/local/etc/openssl/cert.pem"]
+    for path in paths:
+        if path and os.path.exists(path):
+            try:
+                return ssl.create_default_context(cafile=path)
+            except Exception:
+                pass
+    return ssl.create_default_context()
 
 
 class VipaAdapter(BasePlatformAdapter):
@@ -48,28 +72,34 @@ class VipaAdapter(BasePlatformAdapter):
         self.listen = extra_or_secret(config.extra, "listen", "VIPA_LISTEN") or "0.0.0.0:8099"
         self.groq_key = extra_or_secret(config.extra, "groq_api_key", "GROQ_API_KEY") or ""
         self.chat_id = "vipa"
+
         self._out = []
         self._seq = 0
-        self._runner = None
-        self._q = asyncio.Queue()
+        self._lock = threading.Lock()
+        self._q = None            # asyncio.Queue（loop の中で作る）
+        self._loop = None
         self._worker = None
+        self._server = None
+        self._thread = None
 
     # ---------------------------------------------------------------- lifecycle
 
     async def connect(self, *, is_reconnect: bool = False) -> bool:
-        app = web.Application(client_max_size=32 * 1024 * 1024)
-        app.on_response_prepare.append(self._cors)
-        app.router.add_get("/api/health", self._health)
-        app.router.add_get("/api/out", self._out_handler)
-        app.router.add_post("/api/in", self._in)
-        app.router.add_post("/api/voice", self._voice)
-        app.router.add_route("OPTIONS", "/{tail:.*}", self._options)
+        self._loop = asyncio.get_running_loop()
+        if self._q is None:
+            self._q = asyncio.Queue()
 
         host, _, port = self.listen.partition(":")
-        self._runner = web.AppRunner(app)
-        await self._runner.setup()
-        site = web.TCPSite(self._runner, host or "0.0.0.0", int(port or 8099))
-        await site.start()
+        try:
+            self._server = ThreadingHTTPServer(
+                (host or "0.0.0.0", int(port or 8099)), self._make_handler())
+        except OSError as e:
+            log.error("vipa: cannot listen on %s (%s)", self.listen, e)
+            return False
+        self._server.daemon_threads = True
+        self._thread = threading.Thread(target=self._server.serve_forever,
+                                        name="vipa-http", daemon=True)
+        self._thread.start()
         self._worker = asyncio.ensure_future(self._drain())
         self._mark_connected()
         log.info("vipa: listening on %s", self.listen)
@@ -79,9 +109,10 @@ class VipaAdapter(BasePlatformAdapter):
         if self._worker is not None:
             self._worker.cancel()
             self._worker = None
-        if self._runner is not None:
-            await self._runner.cleanup()
-            self._runner = None
+        if self._server is not None:
+            self._server.shutdown()
+            self._server.server_close()
+            self._server = None
         self._mark_disconnected()
 
     async def _drain(self):
@@ -98,62 +129,28 @@ class VipaAdapter(BasePlatformAdapter):
     # ---------------------------------------------------------------- outbox
 
     def _push(self, role, text):
-        self._seq += 1
-        self._out.append({
-            "seq": self._seq,
-            "role": role,
-            "text": text,
-            "ts": int(time.time() * 1000),
-        })
-        if len(self._out) > MAX_OUT:
-            del self._out[:len(self._out) - MAX_OUT]
-        return self._seq
+        with self._lock:
+            self._seq += 1
+            self._out.append({
+                "seq": self._seq,
+                "role": role,
+                "text": text,
+                "ts": int(time.time() * 1000),
+            })
+            if len(self._out) > MAX_OUT:
+                del self._out[:len(self._out) - MAX_OUT]
+            return self._seq
 
-    async def _out_handler(self, request):
-        try:
-            since = int(request.query.get("since", 0))
-        except ValueError:
-            since = 0
-        if since > self._seq:      # 再起動で番号が戻った → 取り直させる
-            since = 0
-        rows = [m for m in self._out if m["seq"] > since]
-        return web.json_response({"messages": rows[-40:], "last": self._seq})
+    def _since(self, since):
+        with self._lock:
+            if since > self._seq:          # 再起動で番号が戻った → 取り直させる
+                since = 0
+            rows = [m for m in self._out if m["seq"] > since]
+            return {"messages": rows[-40:], "last": self._seq}
 
     # ---------------------------------------------------------------- inbound
 
-    async def _in(self, request):
-        if not self._allowed(request):
-            return web.json_response({"error": "forbidden"}, status=403)
-        try:
-            body = await request.json()
-        except Exception:
-            return web.json_response({"error": "bad json"}, status=400)
-        text = (body.get("text") or "").strip()
-        if not text:
-            return web.json_response({"error": "empty"}, status=400)
-        await self._deliver(text, body.get("user") or "vipa")
-        return web.json_response({"ok": True}, status=202)
-
-    async def _voice(self, request):
-        if not self._allowed(request):
-            return web.json_response({"error": "forbidden"}, status=403)
-        if not self.groq_key:
-            return web.json_response({"error": "GROQ_API_KEY がない"}, status=503)
-        audio = await request.read()
-        if len(audio) < 2000:
-            return web.json_response({"error": "too small"}, status=400)
-        ctype = request.headers.get("Content-Type") or "audio/mp4"
-        try:
-            text = await self._transcribe(audio, ctype)
-        except Exception as e:
-            log.warning("vipa: stt failed: %s", e)
-            return web.json_response({"error": "stt: %s" % e}, status=502)
-        if not text:
-            return web.json_response({"error": "empty"}, status=400)
-        await self._deliver(text, "vipa")
-        return web.json_response({"ok": True, "text": text}, status=202)
-
-    async def _deliver(self, text, user):
+    def _deliver(self, text, user="vipa"):
         """端末の入力を積む。受信の応答は待たせない。"""
         self._push("user", text)
         source = self.build_source(
@@ -169,7 +166,7 @@ class VipaAdapter(BasePlatformAdapter):
             source=source,
             message_id=str(int(time.time() * 1000)),
         )
-        self._q.put_nowait(event)
+        self._loop.call_soon_threadsafe(self._q.put_nowait, event)
 
     # ---------------------------------------------------------------- outbound
 
@@ -177,8 +174,7 @@ class VipaAdapter(BasePlatformAdapter):
         text = (content or "").strip()
         if not text:
             return SendResult(success=False)
-        seq = self._push("assistant", text)
-        return SendResult(success=True, message_id=str(seq))
+        return SendResult(success=True, message_id=str(self._push("assistant", text)))
 
     async def send_typing(self, chat_id):
         return None
@@ -186,54 +182,133 @@ class VipaAdapter(BasePlatformAdapter):
     async def get_chat_info(self, chat_id):
         return {"name": "vipaOS", "type": "dm"}
 
-    # ---------------------------------------------------------------- http glue
-
-    def _allowed(self, request):
-        return (not self.secret) or request.headers.get("X-Vipa-Secret") == self.secret
-
-    async def _health(self, request):
-        return web.json_response({"ok": True, "seq": self._seq,
-                                  "stt": bool(self.groq_key)})
-
-    async def _options(self, request):
-        return web.Response(status=204, headers=CORS)
-
-    @staticmethod
-    async def _cors(request, response):
-        for k, v in CORS.items():
-            response.headers[k] = v
-
     # ---------------------------------------------------------------- stt
 
     async def _transcribe(self, audio, content_type):
+        return await asyncio.get_running_loop().run_in_executor(
+            None, self._transcribe_sync, audio, content_type)
+
+    def _transcribe_sync(self, audio, content_type):
+        import ssl
+        import urllib.request
+
         boundary = "----vipa%d" % int(time.time() * 1000)
         head = ("--%s\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\n%s\r\n"
                 "--%s\r\nContent-Disposition: form-data; name=\"file\"; "
                 "filename=\"rec.m4a\"\r\nContent-Type: %s\r\n\r\n"
                 % (boundary, STT_MODEL, boundary, content_type)).encode()
         tail = ("\r\n--%s--\r\n" % boundary).encode()
-        key = self.groq_key
+        ctx = _ssl_context()
 
-        def do_post():
-            import ssl
-            import urllib.request
+        req = urllib.request.Request(
+            GROQ_URL, data=head + audio + tail,
+            headers={"Authorization": "Bearer " + self.groq_key,
+                     "Content-Type": "multipart/form-data; boundary=" + boundary})
+        with urllib.request.urlopen(req, timeout=90, context=ctx) as r:
+            return json.load(r).get("text", "").strip()
 
-            ctx = None
-            try:
-                import certifi
-                ctx = ssl.create_default_context(cafile=certifi.where())
-            except Exception:
-                ctx = ssl.create_default_context()
+    # ---------------------------------------------------------------- http
 
-            req = urllib.request.Request(
-                GROQ_URL, data=head + audio + tail,
-                headers={"Authorization": "Bearer " + key,
-                         "Content-Type": "multipart/form-data; boundary=" + boundary})
-            with urllib.request.urlopen(req, timeout=90, context=ctx) as r:
-                return json.load(r).get("text", "").strip()
+    def _make_handler(self):
+        adapter = self
 
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, do_post)
+        class Handler(BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def log_message(self, *args):
+                return
+
+            # -- helpers
+            def _send(self, code, obj):
+                body = json.dumps(obj, ensure_ascii=False).encode()
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                for k, v in CORS.items():
+                    self.send_header(k, v)
+                self.end_headers()
+                self.wfile.write(body)
+
+            def _body(self):
+                try:
+                    n = int(self.headers.get("Content-Length") or 0)
+                except ValueError:
+                    return b""
+                if n <= 0 or n > MAX_BODY:
+                    return b""
+                return self.rfile.read(n)
+
+            def _allowed(self):
+                return (not adapter.secret) or \
+                       self.headers.get("X-Vipa-Secret") == adapter.secret
+
+            # -- routes
+            def do_OPTIONS(self):
+                self._send(204, {})
+
+            def do_GET(self):
+                path, _, query = self.path.partition("?")
+                if path == "/api/health":
+                    self._send(200, {"ok": True, "seq": adapter._seq,
+                                     "stt": bool(adapter.groq_key)})
+                elif path == "/api/out":
+                    since = 0
+                    for kv in query.split("&"):
+                        k, _, v = kv.partition("=")
+                        if k == "since":
+                            try:
+                                since = int(v)
+                            except ValueError:
+                                since = 0
+                    self._send(200, adapter._since(since))
+                else:
+                    self._send(404, {"error": "not found"})
+
+            def do_POST(self):
+                path, _, _ = self.path.partition("?")
+                if not self._allowed():
+                    self._send(403, {"error": "forbidden"})
+                    return
+
+                if path == "/api/in":
+                    raw = self._body()
+                    try:
+                        text = (json.loads(raw.decode() or "{}").get("text") or "").strip()
+                    except Exception:
+                        self._send(400, {"error": "bad json"})
+                        return
+                    if not text:
+                        self._send(400, {"error": "empty"})
+                        return
+                    adapter._deliver(text)
+                    self._send(202, {"ok": True})
+                    return
+
+                if path == "/api/voice":
+                    if not adapter.groq_key:
+                        self._send(503, {"error": "GROQ_API_KEY がない"})
+                        return
+                    audio = self._body()
+                    if len(audio) < 2000:
+                        self._send(400, {"error": "too small"})
+                        return
+                    ctype = self.headers.get("Content-Type") or "audio/mp4"
+                    try:
+                        text = adapter._transcribe_sync(audio, ctype)
+                    except Exception as e:
+                        log.warning("vipa: stt failed: %s", e)
+                        self._send(502, {"error": "stt: %s" % e})
+                        return
+                    if not text:
+                        self._send(400, {"error": "empty"})
+                        return
+                    adapter._deliver(text)
+                    self._send(202, {"ok": True, "text": text})
+                    return
+
+                self._send(404, {"error": "not found"})
+
+        return Handler
 
 
 def check_requirements() -> bool:

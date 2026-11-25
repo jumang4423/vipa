@@ -64,6 +64,7 @@ adb shell am start -n os.vipa.kiosk/.MainActivity
 | `GET /api/health` | 生死 |
 
 受信は即 `202` を返し、エージェントは裏で走る（1ターンは数分かかる）。
+`adapter.py` は**標準ライブラリだけで動く**（aiohttp 等の追加インストールは不要）。
 返答は箱に積まれ、端末が次のポーリングで拾う。push は使わない（GMS が無い）。
 
 画面を見ていないときは、通知（`PollReceiver`）が同じ箱を5秒ごとに見て、新着だけ通知する。

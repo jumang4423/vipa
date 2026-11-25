@@ -1,8 +1,8 @@
 name: vipa
 label: vipaOS
 kind: platform
-version: 0.2.0
-description: KYF39 端末の口。受信と送信だけ。
+version: 0.3.0
+description: KYF39 端末の口。受信と送信だけ。標準ライブラリのみ。
 author: jumang4423
 
 optional_env:

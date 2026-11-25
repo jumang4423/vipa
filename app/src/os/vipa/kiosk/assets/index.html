@@ -175,13 +175,24 @@ function addBubble(role, text) {
   return el;
 }
 
+var typingSince = 0, typingTimer = null;
+
 function showTyping(label) {
-  typingText.textContent = label || 'Thinking';
+  var base = label || 'Thinking';
+  if (!typingSince) typingSince = Date.now();
+  typingText.textContent = base;
   typing.className = 'typing on';
   thread.appendChild(typing);
   bottom();
+  if (!typingTimer) {
+    typingTimer = setInterval(function () {
+      if (typing.className.indexOf('on') < 0) return;
+      var s = Math.floor((Date.now() - typingSince) / 1000);
+      typingText.textContent = base + (s > 3 ? ' \u00b7 ' + s + 's' : '');
+    }, 1000);
+  }
 }
-function hideTyping() { typing.className = 'typing'; }
+function hideTyping() { typing.className = 'typing'; typingSince = 0; }
 
 /* ---------- poll ---------- */
 function poll() {

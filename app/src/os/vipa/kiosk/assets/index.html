@@ -12,9 +12,8 @@
   body{display:-webkit-box;display:flex;-webkit-box-orient:vertical;
     flex-direction:column}
 
-  .hd{-webkit-box-flex:0;flex:0 0 auto;padding:9px 14px 8px;
-      border-bottom:1px solid #141414;text-align:center}
-  .hd span{font-size:10px;letter-spacing:.24em;color:#6f6f6f}
+  .hd{-webkit-box-flex:0;flex:0 0 auto;display:block;
+      width:100%;height:auto;margin:0;padding:0;border:0}
 
   .thread{-webkit-box-flex:1;flex:1;overflow-y:auto;overflow-x:hidden;
     padding:14px 0 112px;display:-webkit-box;display:flex;
@@ -74,7 +73,7 @@
 </head>
 <body>
 
-  <div class="hd"><span>vipa</span></div>
+  <img class="hd" src="header.png" alt="">
 
   <div class="thread" id="thread">
     <div class="typing" id="typing">

@@ -330,15 +330,6 @@ class VipaAdapter(BasePlatformAdapter):
                     self._send(200, {"ok": True})
                     return
 
-                if path == "/api/newsession":
-                    # A fresh session picks up the current philosophy/criteria.
-                    adapter.chat_id = "%s-%d" % (adapter.chat_id.split("-")[0] or "vipa",
-                                                 int(time.time()))
-                    adapter._reset()
-                    log.info("vipa: new session chat_id=%s", adapter.chat_id)
-                    self._send(200, {"ok": True, "chat_id": adapter.chat_id})
-                    return
-
                 if path == "/api/voice":
                     if not adapter.groq_key:
                         self._send(503, {"error": "GROQ_API_KEY is not set; the phone cannot send voice"})

@@ -148,12 +148,17 @@ class VipaAdapter(BasePlatformAdapter):
             self._server = None
         self._mark_disconnected()
 
-    def _rotate_session(self):
-        """Start a fresh session: the prompt is rebuilt from the current rules."""
+    def _rotate_session(self, clear=False):
+        """Start a fresh session: the prompt is rebuilt from the current rules.
+
+        Nothing is pushed to the phone. With clear=False the outbox is left alone as well,
+        so a midnight rotation is invisible to someone asleep.
+        """
         base = self.chat_id.split("-")[0] or "vipa"
         self.chat_id = "%s-%d" % (base, int(time.time()))
-        self._reset()
-        log.info("vipa: new session chat_id=%s", self.chat_id)
+        if clear:
+            self._reset()
+        log.info("vipa: new session chat_id=%s (cleared=%s)", self.chat_id, clear)
 
     async def _daily_reset(self):
         """Rotate the session once a day, so a long chat never becomes the phone's problem."""

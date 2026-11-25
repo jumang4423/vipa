@@ -169,6 +169,8 @@ class VipaAdapter(BasePlatformAdapter):
             override = extra_or_secret(getattr(self.config, "extra", {}) or {}, "reset_secs", "VIPA_RESET_SECS")
             if override:
                 delay = max(3.0, float(override))
+            if not override:
+                log.info("vipa: session reset scheduled for %s", nxt.strftime("%Y-%m-%d %H:%M"))
             await asyncio.sleep(delay)
             self._rotate_session()
 

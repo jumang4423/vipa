@@ -13,7 +13,6 @@ UI も別サーバーも持たない。画面は APK の中。
 
 環境変数（config.yaml の gateway.platforms.vipa.extra でも可）:
     VIPA_LISTEN    待受。既定 0.0.0.0:8099
-    VIPA_SECRET    共有トークン（任意）
     GROQ_API_KEY   音声を使うなら
 """
 import asyncio
@@ -38,7 +37,7 @@ MAX_BODY = 32 * 1024 * 1024
 
 CORS = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type, X-Vipa-Secret",
+    "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 }
 
@@ -68,7 +67,6 @@ def _ssl_context():
 class VipaAdapter(BasePlatformAdapter):
     def __init__(self, config: PlatformConfig):
         super().__init__(config, Platform("vipa"))
-        self.secret = extra_or_secret(config.extra, "secret", "VIPA_SECRET") or ""
         self.listen = extra_or_secret(config.extra, "listen", "VIPA_LISTEN") or "0.0.0.0:8099"
         self.groq_key = extra_or_secret(config.extra, "groq_api_key", "GROQ_API_KEY") or ""
         self.chat_id = "vipa"
@@ -238,10 +236,6 @@ class VipaAdapter(BasePlatformAdapter):
                     return b""
                 return self.rfile.read(n)
 
-            def _allowed(self):
-                return (not adapter.secret) or \
-                       self.headers.get("X-Vipa-Secret") == adapter.secret
-
             # -- routes
             def do_OPTIONS(self):
                 self._send(204, {})
@@ -266,9 +260,6 @@ class VipaAdapter(BasePlatformAdapter):
 
             def do_POST(self):
                 path, _, _ = self.path.partition("?")
-                if not self._allowed():
-                    self._send(403, {"error": "forbidden"})
-                    return
 
                 if path == "/api/in":
                     raw = self._body()
@@ -316,7 +307,7 @@ def check_requirements() -> bool:
 
 
 def register(ctx):
-    ctx.register_platform(
+    kwargs = dict(
         name="vipa",
         label="vipaOS",
         adapter_factory=VipaAdapter,
@@ -328,3 +319,12 @@ def register(ctx):
             "返答は短く1行を基本にし、絵文字を使わない。話しかけられたときだけ答える。"
         ),
     )
+    # 端末は家の中の1台。承認（ペアリング）を挟まない。
+    kwargs["allowed_users_env"] = "VIPA_ALLOWED_USERS"
+    kwargs["allow_all_env"] = "VIPA_ALLOW_ALL_USERS"
+    try:
+        ctx.register_platform(**kwargs)
+    except TypeError:
+        for key in ("allowed_users_env", "allow_all_env"):
+            kwargs.pop(key, None)
+        ctx.register_platform(**kwargs)

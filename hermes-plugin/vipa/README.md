@@ -13,6 +13,8 @@
 
 `adapter.py` は**標準ライブラリだけで動く**（追加の pip 不要）。
 
+承認（ペアリング）は不要。`VIPA_ALLOW_ALL_USERS=1` を `install.sh` が入れる。
+
 `GET /api/out` は `{"messages":[{seq,role,text,ts}],"last":N}` を返す。`role` は `user` か `assistant`。
 端末は `last` を次の `since` に使う。
 
@@ -41,7 +43,6 @@ hermes gateway restart
 
 ```
 VIPA_LISTEN=0.0.0.0:8099
-VIPA_SECRET=（任意）
 GROQ_API_KEY=（音声を使うなら）
 ```
 

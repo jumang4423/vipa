@@ -44,7 +44,8 @@ if grep -q '^VIPA_LISTEN=' "$ENV"; then
 else
   printf 'VIPA_LISTEN=0.0.0.0:%s\n' "$PORT" >> "$ENV"
 fi
-say "listen -> 0.0.0.0:$PORT"
+grep -q '^VIPA_ALLOW_ALL_USERS=' "$ENV" || printf 'VIPA_ALLOW_ALL_USERS=1\n' >> "$ENV"
+say "listen -> 0.0.0.0:${PORT}（承認なし）"
 
 # ---------------------------------------------------------------- 3. config
 [ -f "$CFG" ] || die "$CFG が無い"
@@ -150,7 +151,12 @@ else
   say "再起動の結果がまだ出ていない（$REPORT を後で見る）"
 fi
 
-say "done"
-printf '\n  curl "http://127.0.0.1:%s/api/health"\n' "$PORT"
-printf '  curl -X POST "http://127.0.0.1:%s/api/in" -H "Content-Type: application/json" -d '"'"'{"text":"こんにちは"}'"'"'\n' "$PORT"
-printf '  curl "http://127.0.0.1:%s/api/out?since=0"\n\n' "$PORT"
+printf '\n'
+if [ -n "${SERIAL}" ]; then
+  printf '  NEXT: 何もしなくていい。端末を開いて話しかける。\n'
+else
+  printf '  NEXT: 端末を USB で挿して、もう一度 ./install.sh を実行する。\n'
+fi
+grep -q '^GROQ_API_KEY=.' "$ENV" 2>/dev/null \
+  || printf '  （声も使うなら ~/.hermes/.env に GROQ_API_KEY=... を1行）\n'
+printf '\n  health: curl http://127.0.0.1:%s/api/health\n\n' "$PORT"

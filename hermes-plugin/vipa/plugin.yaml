@@ -9,9 +9,6 @@ optional_env:
   - name: VIPA_LISTEN
     description: "待受。既定 0.0.0.0:8099"
     password: false
-  - name: VIPA_SECRET
-    description: "共有トークン（任意）"
-    password: true
   - name: GROQ_API_KEY
     description: "音声入力を使う場合のみ"
     password: true

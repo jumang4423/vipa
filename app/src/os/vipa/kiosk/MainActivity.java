@@ -86,6 +86,24 @@ public class MainActivity extends Activity {
             }
 
             @Override
+            public void onReceivedSslError(WebView v, android.webkit.SslErrorHandler handler,
+                                           android.net.http.SslError err) {
+                String host = null;
+                try {
+                    host = new URL(SERVER).getHost();
+                } catch (Throwable ignored) {}
+                String failed = err == null ? null : err.getUrl();
+                // 2015 年の CA しか無い端末なので、自分のサーバーのホストだけ通す
+                if (host != null && failed != null && failed.contains(host)) {
+                    Log.i(TAG, "ssl: proceed " + failed);
+                    handler.proceed();
+                } else {
+                    Log.i(TAG, "ssl: cancel " + failed);
+                    handler.cancel();
+                }
+            }
+
+            @Override
             public void onReceivedError(WebView v, int code, String desc, String failingUrl) {
                 if (retry < MAX_RETRY) {
                     retry++;
@@ -367,6 +385,7 @@ public class MainActivity extends Activity {
         try {
             byte[] audio = readBytes(f);
             c = (HttpURLConnection) new URL(SERVER + "/api/voice").openConnection();
+            Tls.relax(c);
             c.setConnectTimeout(20000);
             c.setReadTimeout(120000);
             c.setRequestMethod("POST");

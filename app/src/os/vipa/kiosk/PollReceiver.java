@@ -72,6 +72,7 @@ public class PollReceiver extends BroadcastReceiver {
         try {
             conn = (HttpURLConnection)
                     new URL(MainActivity.SERVER + "/api/out?since=" + last).openConnection();
+            Tls.relax(conn);
             conn.setConnectTimeout(3000);
             conn.setReadTimeout(3000);
             int code = conn.getResponseCode();

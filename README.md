@@ -88,6 +88,7 @@ adb shell am start -n os.vipa.kiosk/.MainActivity
 - タッチパネルなし。キー4つ（左上=録音、下段=一番下へ、十字=スクロール）
 - 480×854、1行26文字
 - Android 5.1、GMS なし → push 不可、ポーリングのみ
+- Android 5.1 は 2015 年の CA しか持たないため、Let's Encrypt（ngrok）の証明書を検証できない。`Tls.java` で自分のサーバーのホストに限って通している
 - 電池1日
 
 ## ライセンス

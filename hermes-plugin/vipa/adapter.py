@@ -33,6 +33,18 @@ log = logging.getLogger(__name__)
 GROQ_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 STT_MODEL = "whisper-large-v3-turbo"
 MAX_OUT = 200
+
+# Hermes does not reliably put a plugin platform's hint into a gateway session's prompt
+# (verified on 0.23.4: platform_hint, agent.platform_hints and SOUL.md all failed to reach
+# the vipa agent). Until that is fixed upstream, the rules ride on the message itself.
+RULES = (
+    "[vipa] The phone is a KYF39: 480x854, four keys, voice only. "
+    "Only what society requires today may reach it: a deadline, a person waiting for an answer, "
+    "a commitment, a change that alters today's plan. "
+    "Never counts, rankings, streaks, scores or anything that makes someone check again — if a job "
+    "would send that, refuse and say why in one line. "
+    "Reply in one short line. No emoji. If nothing is owed, say nothing."
+)
 MAX_BODY = 32 * 1024 * 1024
 
 CORS = {
@@ -69,6 +81,7 @@ class VipaAdapter(BasePlatformAdapter):
         self.listen = extra_or_secret(config.extra, "listen", "VIPA_LISTEN") or "0.0.0.0:8099"
         self.groq_key = extra_or_secret(config.extra, "groq_api_key", "GROQ_API_KEY") or ""
         self.chat_id = "vipa"
+        self.inject_rules = (extra_or_secret(config.extra, "inject_rules", "VIPA_INJECT_RULES") or "1") not in ("0", "false", "no")
 
         self._out = []
         self._seq = 0
@@ -155,6 +168,8 @@ class VipaAdapter(BasePlatformAdapter):
     def _deliver(self, text, user="vipa"):
         """Queue one message. The HTTP response never waits for the agent."""
         self._push("user", text)
+        if self.inject_rules:
+            text = RULES + "\n\n" + text
         source = self.build_source(
             chat_id=self.chat_id,
             chat_name="vipa",

@@ -328,6 +328,8 @@ def check_requirements() -> bool:
 
 
 def register(ctx):
+    _hint = platform_hint()
+    log.info("vipa: platform hint %d chars", len(_hint))
     kwargs = dict(
         name="vipa",
         label="vipa",
@@ -335,7 +337,7 @@ def register(ctx):
         check_fn=check_requirements,
         required_env=[],
         max_message_length=2000,
-        platform_hint=platform_hint(),
+        platform_hint=_hint,
     )
     # One phone, at home. No pairing prompt.
     kwargs["allowed_users_env"] = "VIPA_ALLOWED_USERS"

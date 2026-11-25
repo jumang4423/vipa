@@ -103,6 +103,44 @@ else:
     print("  config: appended platforms")
 PY
 
+# 3b. the same text straight into the agent's system prompt, as a config override
+python3 - "$CFG" "$DST" <<'PY2'
+import os, re, sys
+
+cfg, dst = sys.argv[1], sys.argv[2]
+
+
+def read(name):
+    try:
+        with open(os.path.join(dst, name), encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+text = "\n\n".join(p for p in (read("philosophy.md"), read("criteria.md")) if p)
+lines = open(cfg, encoding="utf-8").read().splitlines()
+block = ["  platform_hints:", "    vipa:", "      replace: |"]
+block += ["        " + l if l.strip() else "" for l in text.splitlines()]
+
+if any(l.strip() == "platform_hints:" for l in lines):
+    print("  config: platform_hints already present (left alone)")
+else:
+    # find the top-level `agent:` block and insert at its end
+    start = next((i for i, l in enumerate(lines) if l.rstrip() == "agent:"), None)
+    if start is None:
+        lines += ["", "agent:"] + block
+    else:
+        end = start + 1
+        while end < len(lines) and (lines[end].startswith(" ") or lines[end].strip() == ""):
+            if end + 1 < len(lines) and not lines[end].startswith(" ") and lines[end].strip():
+                break
+            end += 1
+        lines[end:end] = block
+    open(cfg, "w", encoding="utf-8").write("\n".join(lines) + "\n")
+    print("  config: platform_hints.vipa.replace written")
+PY2
+
 # ---------------------------------------------------------------- 4. gateway
 # Restarting from inside a gateway session kills that session, so the restart is
 # detached and delayed, and the result goes to a file.

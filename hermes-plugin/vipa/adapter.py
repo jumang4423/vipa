@@ -8,6 +8,7 @@ No UI, no extra server, no third-party dependencies: stdlib only.
       POST /api/voice        audio -> Groq transcription -> agent
       POST /api/in           {"text": "..."} -> agent
       GET  /api/out?since=N  new messages
+      GET  /api/schedule     the day, from schedule.json
       POST /api/push         {"text": "..."} straight to the phone, no agent
       POST /api/reset        empty the outbox
       GET  /api/health
@@ -212,6 +213,18 @@ class VipaAdapter(BasePlatformAdapter):
             rows = [m for m in self._out if m["seq"] > since]
             return {"messages": rows[-40:], "last": self._seq}
 
+    def _schedule(self):
+        """The day as the phone shows it. Edit schedule.json; nothing else to touch."""
+        try:
+            with open(os.path.join(HERE, "schedule.json"), encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            log.warning("vipa: schedule.json: %s", e)
+            data = {"items": [], "note": ""}
+        items = [i for i in data.get("items", []) if i.get("at") and i.get("title")]
+        items.sort(key=lambda i: i["at"])
+        return {"items": items, "note": data.get("note", ""), "ts": int(time.time() * 1000)}
+
     def _reset(self):
         with self._lock:
             del self._out[:]
@@ -324,6 +337,8 @@ class VipaAdapter(BasePlatformAdapter):
                 if path == "/api/health":
                     self._send(200, {"ok": True, "seq": adapter._seq,
                                      "stt": bool(adapter.groq_key)})
+                elif path == "/api/schedule":
+                    self._send(200, adapter._schedule())
                 elif path == "/api/out":
                     since = 0
                     for kv in query.split("&"):

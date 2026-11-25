@@ -36,7 +36,7 @@ public class MainActivity extends Activity {
     private WebView web;
     private int retry = 0;
     private final Handler handler = new Handler();
-    private final String[] skLabels = {"Reply", "", "\u2193", ""};
+    private final String[] skLabels = {"Reply", "", "Switch", ""};
 
     public static volatile boolean visible = false;
 
@@ -313,8 +313,13 @@ public class MainActivity extends Activity {
             if (c == KeyEvent.KEYCODE_F1) {          // top-left soft key
                 toggleVoice(); return true;
             }
-            if (c == KeyEvent.KEYCODE_F2 || c == KeyEvent.KEYCODE_F3
-                    || c == KeyEvent.KEYCODE_F4
+            if (c == KeyEvent.KEYCODE_F3) {          // right soft key: switch view
+                web.loadUrl("javascript:toggleView()"); return true;
+            }
+            if (c == KeyEvent.KEYCODE_F4) {          // same physical press sends F3 then F4
+                return true;
+            }
+            if (c == KeyEvent.KEYCODE_F2
                     || c == KeyEvent.KEYCODE_BACK) {          // lower keys: jump to the end
                 web.loadUrl("javascript:bottom()"); return true;
             }

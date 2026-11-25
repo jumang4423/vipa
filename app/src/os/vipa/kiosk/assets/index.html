@@ -16,7 +16,7 @@
   .hd{-webkit-box-flex:0;flex:0 0 auto;display:block;
       width:100%;height:auto;margin:0;padding:0;border:0}
 
-  .thread{-webkit-box-flex:1;flex:1;overflow-y:auto;overflow-x:hidden;
+  .thread{position:relative;-webkit-box-flex:1;flex:1;overflow-y:auto;overflow-x:hidden;
     padding:14px 0 112px;display:-webkit-box;display:flex;
     -webkit-box-orient:vertical;flex-direction:column}
 
@@ -88,13 +88,50 @@
     margin:-1.5px 0 0 -1.5px;border-radius:50%;background:#8c8c8c}
   @-webkit-keyframes bloom{0%,100%{opacity:.16}40%{opacity:1}}
   @keyframes bloom{0%,100%{opacity:.16}40%{opacity:1}}
+  .empty{display:none;position:absolute;left:0;right:0;top:42%;text-align:center;
+    color:#5d5d5d;font-size:13px;letter-spacing:.06em}
+  .empty.on{display:block}
+
+  /* schedule screen: the day, nothing else */
+  .sched{display:none;position:absolute;left:0;right:0;top:49px;bottom:64px;
+    overflow-y:auto;padding:14px 14px 8px;background:#000;line-height:1.25;
+    font-family:-apple-system,"Hiragino Sans",sans-serif}
+  .sched.on{display:block}
+  .sched .now{font-size:26px;line-height:1.2;font-weight:600;color:#f2f2f2;
+    text-align:center;word-wrap:break-word}
+  .sched .nowat{font-size:20px;color:#c9c9c9;text-align:center;margin-top:2px}
+  .sched .date{font-size:12px;color:#9a9a9a;text-align:center;margin:10px 0 4px}
+  .sched .axis{position:relative;height:24px;margin:2px 0 0}
+  .sched .axis .line{position:absolute;left:0;right:0;top:11px;height:2px;background:#3a3a3a}
+  .sched .axis .dot{position:absolute;top:7px;width:10px;height:10px;margin-left:-5px;
+    border-radius:50%;background:#fff;border:2px solid #000}
+  .sched .ticks{position:relative;height:14px;font-size:10px;color:#7d7d7d}
+  .sched .ticks span{position:absolute;top:0;white-space:nowrap}
+  .sched .it{display:-webkit-box;display:flex;padding:5px 0;border-top:1px solid #171717}
+  .sched .it .t{width:44px;font-size:10px;color:#7d7d7d;padding-top:2px}
+  .sched .it .b{-webkit-box-flex:1;flex:1}
+  .sched .it .ti{font-size:13px;line-height:1.25;color:#e6e6e6}
+  .sched .it .no{font-size:11px;color:#8a8a8a;margin-top:2px}
+  .sched .it.cur .ti{color:#fff}
+  .sched .it.cur .t{color:#d0d0d0}
+
 </style>
 </head>
 <body>
 
   <img class="hd" src="header.png" alt="">
 
+  <div class="sched" id="sched">
+    <div class="now" id="now-title">&nbsp;</div>
+    <div class="nowat" id="now-at"></div>
+    <div class="date" id="sched-date"></div>
+    <div class="axis" id="axis"><div class="line"></div><div class="dot" id="dot"></div></div>
+    <div class="ticks" id="ticks"></div>
+    <div id="sched-list"></div>
+  </div>
+
   <div class="thread" id="thread">
+    <div class="empty" id="empty">No messages</div>
     <div class="rec" id="rec">
       <span class="bars"><b></b><b></b><b></b><b></b></span>
       <span class="t" id="rec-text">Listening</span>
@@ -172,12 +209,19 @@ function md(src) {
    height collapses and the document scrolls instead. Check both. */
 function threadScrolls() { return thread.scrollHeight > thread.clientHeight + 4; }
 
+function activeScroller() {
+  if (schedOn) return schedEl;
+  return threadScrolls() ? thread : null;
+}
+
 function bottom() {
+  if (schedOn) { schedEl.scrollTop = schedEl.scrollHeight; return; }
   if (threadScrolls()) thread.scrollTop = thread.scrollHeight;
   else window.scrollTo(0, document.body.scrollHeight);
 }
 
 function scrollByPx(dy) {
+  if (schedOn) { schedEl.scrollTop = schedEl.scrollTop + dy; return; }
   if (threadScrolls()) thread.scrollTop = thread.scrollTop + dy;
   else window.scrollBy(0, dy);
 }
@@ -188,18 +232,28 @@ function showError(text) {
   bottom();
 }
 
+var emptyEl = document.getElementById('empty');
+
+function updateEmpty() {
+  var any = thread.getElementsByClassName('b').length > 0;
+  var busy = typing.className.indexOf('on') >= 0;
+  emptyEl.className = (!any && !busy) ? 'empty on' : 'empty';
+}
+
 function addBubble(role, text) {
   var el = document.createElement('div');
   el.className = 'b ' + (role === 'user' ? 'me' : 'ai');
   if (role === 'user') el.textContent = text;
   else el.innerHTML = md(text);
   thread.appendChild(el);
+  updateEmpty();
   return el;
 }
 
 var typingSince = 0, typingTimer = null;
 
 function showTyping(label) {
+  if (emptyEl) emptyEl.className = 'empty';
   var base = label || 'Thinking';
   if (!typingSince) typingSince = Date.now();
   typingText.textContent = base;
@@ -214,7 +268,7 @@ function showTyping(label) {
     }, 1000);
   }
 }
-function hideTyping() { typing.className = 'typing'; typingSince = 0; }
+function hideTyping() { typing.className = 'typing'; typingSince = 0; updateEmpty(); }
 
 /* called from Java while the recorder is running */
 var rec = document.getElementById('rec');
@@ -255,6 +309,7 @@ function poll() {
       if (lastRole === 'user') showTyping();
       else if (lastRole === 'assistant') hideTyping();
       if (ms.length) { bottom(); }
+      updateEmpty();
     } catch (e) {}
   };
   x.onerror = x.ontimeout = function () {
@@ -264,10 +319,115 @@ function poll() {
   x.send();
 }
 
+/* ---------- schedule screen (Switch key) ---------- */
+var sched = null;
+var schedOn = false;
+var schedEl = document.getElementById('sched');
+var threadEl = document.getElementById('thread');
+
+function two(n) { return (n < 10 ? '0' : '') + n; }
+
+function minutes(hhmm) {
+  var p = String(hhmm).split(':');
+  return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
+}
+
+function loadSchedule() {
+  var x = new XMLHttpRequest();
+  x.open('GET', API + '/api/schedule', true);
+  x.timeout = 8000;
+  x.onload = function () {
+    try { sched = JSON.parse(x.responseText); } catch (e) { sched = null; }
+    renderSchedule();
+  };
+  x.onerror = x.ontimeout = function () { sched = null; renderSchedule(); };
+  x.send();
+}
+
+function currentIndex(items, now) {
+  var idx = 0;
+  for (var i = 0; i < items.length; i++) {
+    if (minutes(items[i].at) <= now) idx = i;
+  }
+  return idx;
+}
+
+function renderSchedule() {
+  if (!schedOn) return;
+  var d = new Date();
+  var now = d.getHours() * 60 + d.getMinutes();
+  var days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  document.getElementById('sched-date').textContent =
+    days[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate();
+
+  var items = (sched && sched.items) || [];
+  var list = document.getElementById('sched-list');
+  list.innerHTML = '';
+  document.getElementById('now-title').textContent = items.length ? '' : 'No schedule';
+  document.getElementById('now-at').textContent = items.length ? '' : 'offline?';
+
+  if (!items.length) {
+    return;
+  }
+
+  var cur = currentIndex(items, now);
+  document.getElementById('now-title').textContent = items[cur].title;
+  document.getElementById('now-at').textContent = items[cur].at;
+
+  for (var i = 0; i < items.length; i++) {
+    var el = document.createElement('div');
+    el.className = 'it' + (i === cur ? ' cur' : '');
+    var t = document.createElement('div'); t.className = 't'; t.textContent = items[i].at;
+    var b = document.createElement('div'); b.className = 'b';
+    var ti = document.createElement('div'); ti.className = 'ti'; ti.textContent = items[i].title;
+    b.appendChild(ti);
+    if (items[i].note) {
+      var no = document.createElement('div'); no.className = 'no'; no.textContent = items[i].note;
+      b.appendChild(no);
+    }
+    el.appendChild(t); el.appendChild(b);
+    list.appendChild(el);
+  }
+
+  // axis: from the first to the last item, with a dot at now
+  var a = minutes(items[0].at), z = minutes(items[items.length - 1].at);
+  var span = Math.max(1, z - a);
+  var pct = Math.max(0, Math.min(100, ((now - a) / span) * 100));
+  document.getElementById('dot').style.left = pct + '%';
+
+  var ticks = document.getElementById('ticks');
+  ticks.innerHTML = '';
+  var picks = [items[0].at, items[Math.floor(items.length / 3)].at,
+               items[Math.floor(items.length * 2 / 3)].at, items[items.length - 1].at];
+  for (var k = 0; k < picks.length; k++) {
+    var sp = document.createElement('span');
+    sp.textContent = picks[k];
+    sp.style.left = (k === picks.length - 1 ? 'auto' : (k * 33) + '%');
+    if (k === picks.length - 1) sp.style.right = '0';
+    ticks.appendChild(sp);
+  }
+
+}
+
+function toggleView() {
+  schedOn = !schedOn;
+  schedEl.className = schedOn ? 'sched on' : 'sched';
+  threadEl.style.display = schedOn ? 'none' : 'flex';
+  if (schedOn) { renderSchedule(); if (!sched) loadSchedule(); }
+  else { bottom(); }
+}
+
 /* ---------- called from Java ---------- */
 function sk(dy) { scrollByPx(dy); }
 
 function nextPage() {
+  if (schedOn) {
+    var sh = schedEl.clientHeight;
+    if (schedEl.scrollTop + sh >= schedEl.scrollHeight - 4) schedEl.scrollTop = 0;
+    else schedEl.scrollTop = schedEl.scrollTop + sh * 0.9;
+    return;
+  }
   var h = window.innerHeight;
   if (threadScrolls()) {
     if (thread.scrollTop + thread.clientHeight >= thread.scrollHeight - 4) thread.scrollTop = 0;
@@ -281,6 +441,7 @@ function nextPage() {
 window.addEventListener('load', function () {
   poll();
   setInterval(poll, POLL_MS);
+  setInterval(function () { if (schedOn) renderSchedule(); }, 30000);
 });
 </script>
 

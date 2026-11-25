@@ -1,0 +1,13 @@
+{
+  "note": "Times are fixed — even on off days, wake up at 06:00.",
+  "items": [
+    {"at": "06:00", "title": "Wake up", "note": "Anapana in bed, 5 min"},
+    {"at": "06:30", "title": "Morning meditation", "note": "1 hour"},
+    {"at": "08:00", "title": "Work"},
+    {"at": "19:00", "title": "Finish eating"},
+    {"at": "20:30", "title": "Shower"},
+    {"at": "21:00", "title": "Evening meditation", "note": "1 hour"},
+    {"at": "22:00", "title": "No electronics after meditation", "note": "Hot water, reading"},
+    {"at": "22:30", "title": "Sleep", "note": "Anapana in bed, 5 min"}
+  ]
+}

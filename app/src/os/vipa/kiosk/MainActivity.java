@@ -21,7 +21,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * vipaOS terminal.
+ * vipa terminal.
  *
  * Shows the chat the home machine serves, and uploads voice to it.
  * top-left = reply (record) / bottom keys = jump to end / d-pad = scroll
@@ -264,10 +264,10 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Use /sdcard/vipaos.url when present, else the built-in default. */
+    /** Use /sdcard/vipa.url when present, else the built-in default. */
     private String resolveServer() {
         try {
-            java.io.File f = new java.io.File("/sdcard/vipaos.url");
+            java.io.File f = new java.io.File("/sdcard/vipa.url");
             if (f.exists()) {
                 java.io.BufferedReader r = new java.io.BufferedReader(
                         new java.io.FileReader(f));

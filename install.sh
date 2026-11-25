@@ -67,7 +67,7 @@ BLOCK = (
     "    home_channel:\n"
     "      platform: vipa\n"
     "      chat_id: vipa\n"
-    "      name: vipaOS\n"
+    "      name: vipa\n"
     "      user_id: vipa\n"
 )
 
@@ -81,7 +81,7 @@ def ensure_inside(text):
     if not re.search(r'^      chat_id: vipa', text, re.M):
         text = re.sub(r'^(  vipa:[ \t]*\n    enabled: true[ \t]*\n(?:    [a-z_]+: [^\n]*\n)*)',
                       r'\1    home_channel:\n      platform: vipa\n      chat_id: vipa\n'
-                      r'      name: vipaOS\n      user_id: vipa\n',
+                      r'      name: vipa\n      user_id: vipa\n',
                       text, count=1, flags=re.M)
     return text
 
@@ -187,9 +187,9 @@ if [ -z "$SERIAL" ] && [ -n "$ADB_BIN" ]; then
   fi
 fi
 if [ -n "$SERIAL" ]; then
-  "$ADB_BIN" -s "$SERIAL" install -r "$REPO/app/vipaos.apk" >/dev/null && say "APK installed ($SERIAL)"
+  "$ADB_BIN" -s "$SERIAL" install -r "$REPO/app/vipa.apk" >/dev/null && say "APK installed ($SERIAL)"
   printf '%s\n' "$URL" > /tmp/vipa.url
-  "$ADB_BIN" -s "$SERIAL" push /tmp/vipa.url /sdcard/vipaos.url >/dev/null && say "phone -> $URL"
+  "$ADB_BIN" -s "$SERIAL" push /tmp/vipa.url /sdcard/vipa.url >/dev/null && say "phone -> $URL"
   "$ADB_BIN" -s "$SERIAL" shell am start -n os.vipa.kiosk/.MainActivity >/dev/null 2>&1 || true
 else
   say "no phone on USB"

@@ -14,13 +14,13 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 
     <application
-        android:label="vipaOS"
+        android:label="vipa"
         android:allowBackup="false"
         android:hardwareAccelerated="true">
 
         <activity
             android:name=".MainActivity"
-            android:label="vipaOS"
+            android:label="vipa"
             android:exported="true"
             android:screenOrientation="portrait"
             android:configChanges="orientation|keyboardHidden|screenSize|keyboard">

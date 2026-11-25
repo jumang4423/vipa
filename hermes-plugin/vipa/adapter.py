@@ -157,7 +157,7 @@ class VipaAdapter(BasePlatformAdapter):
         self._push("user", text)
         source = self.build_source(
             chat_id=self.chat_id,
-            chat_name="vipaOS",
+            chat_name="vipa",
             chat_type="dm",
             user_id=user,
             user_name=user,
@@ -182,7 +182,7 @@ class VipaAdapter(BasePlatformAdapter):
         return None
 
     async def get_chat_info(self, chat_id):
-        return {"name": "vipaOS", "type": "dm"}
+        return {"name": "vipa", "type": "dm"}
 
     # ---------------------------------------------------------------- speech
 
@@ -307,14 +307,20 @@ class VipaAdapter(BasePlatformAdapter):
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def platform_hint() -> str:
-    """The philosophy ships with the plugin and is injected into every vipa turn."""
+def _read(name):
     try:
-        with open(os.path.join(HERE, "philosophy.md"), encoding="utf-8") as f:
+        with open(os.path.join(HERE, name), encoding="utf-8") as f:
             return f.read().strip()
     except Exception:
-        return ("vipaOS is a tiny flip phone (KYF39): 480x854, no touchscreen, four keys. "
-                "Answer in one short line. No emoji. Only what is actually owed today.")
+        return ""
+
+
+def platform_hint() -> str:
+    """philosophy.md and criteria.md ship with the plugin and enter every vipa turn."""
+    parts = [_read("philosophy.md"), _read("criteria.md")]
+    text = "\n\n".join(p for p in parts if p)
+    return text or ("vipa is a tiny flip phone (KYF39): 480x854, no touchscreen, four keys. "
+                    "Answer in one short line. No emoji. Only what is actually owed today.")
 
 
 def check_requirements() -> bool:
@@ -324,7 +330,7 @@ def check_requirements() -> bool:
 def register(ctx):
     kwargs = dict(
         name="vipa",
-        label="vipaOS",
+        label="vipa",
         adapter_factory=VipaAdapter,
         check_fn=check_requirements,
         required_env=[],

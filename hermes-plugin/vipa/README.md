@@ -68,6 +68,6 @@ Put the URL on the phone:
 
 ```bash
 echo 'https://xxxx.ngrok-free.app' > /tmp/vipa.url
-adb push /tmp/vipa.url /sdcard/vipaos.url
+adb push /tmp/vipa.url /sdcard/vipa.url
 adb shell am start -n os.vipa.kiosk/.MainActivity
 ```

@@ -10,7 +10,7 @@ follow it too.
 | `~/.hermes/plugins/vipa/` | the plugin (`adapter.py`, stdlib only, no pip installs) |
 | `~/.hermes/config.yaml` | `platforms.vipa.*` added; backup written next to it |
 | `~/.hermes/.env` | `VIPA_LISTEN`, `VIPA_ALLOW_ALL_USERS` (and `GROQ_API_KEY` if provided) |
-| `/sdcard/vipaos.url` on the phone | the server URL the app should talk to |
+| `/sdcard/vipa.url` on the phone | the server URL the app should talk to |
 | `/tmp/vipa-install.txt` | `ok` or the tail of the gateway log |
 
 The plugin *is* the server. There is no second process and no extra port besides the one
@@ -77,7 +77,7 @@ Put the URL on the phone:
 
 ```bash
 echo 'https://xxxx.ngrok-free.app' > /tmp/vipa.url
-adb push /tmp/vipa.url /sdcard/vipaos.url
+adb push /tmp/vipa.url /sdcard/vipa.url
 adb shell am start -n os.vipa.kiosk/.MainActivity
 ```
 
@@ -100,11 +100,11 @@ Known traps:
 
 ## Rebuilding the app
 
-Only needed if you change `app/`. The prebuilt `app/vipaos.apk` is committed.
+Only needed if you change `app/`. The prebuilt `app/vipa.apk` is committed.
 
 ```bash
 SDK="$HOME/Library/Android/sdk"; BT="$SDK/build-tools/34.0.0"; AJ="$SDK/platforms/android-34/android.jar"
-P=app; KS="$HOME/vipaos/debug.keystore"
+P=app; KS="$HOME/vipa/debug.keystore"
 javac --release 8 -cp "$AJ" -d "$P/build/classes" $(find "$P/src" -name '*.java')
 "$BT/d8" --min-api 21 --lib "$AJ" --output "$P/build/dex" $(find "$P/build/classes" -name '*.class')
 "$BT/aapt2" link -o "$P/build/base.apk" -I "$AJ" --manifest "$P/AndroidManifest.xml" \
@@ -113,8 +113,8 @@ cp "$P/build/base.apk" "$P/build/unsigned.apk"
 (cd "$P/build/dex" && zip -q -j "../unsigned.apk" classes.dex)
 "$BT/zipalign" -f -p 4 "$P/build/unsigned.apk" "$P/build/aligned.apk"
 "$BT/apksigner" sign --ks "$KS" --ks-pass pass:android --key-pass pass:android \
-  --out "$P/out/vipaos.apk" "$P/build/aligned.apk"
-cp "$P/out/vipaos.apk" app/vipaos.apk
+  --out "$P/out/vipa.apk" "$P/build/aligned.apk"
+cp "$P/out/vipa.apk" app/vipa.apk
 ```
 
 ## Removing it
@@ -124,7 +124,7 @@ hermes plugins disable vipa
 rm -rf ~/.hermes/plugins/vipa
 launchctl kickstart -k gui/$(id -u)/ai.hermes.gateway
 adb uninstall os.vipa.kiosk
-adb shell rm -f /sdcard/vipaos.url
+adb shell rm -f /sdcard/vipa.url
 ```
 
 Also delete the `platforms.vipa` block from `config.yaml` and the `VIPA_*` / `GROQ_API_KEY`

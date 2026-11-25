@@ -1,5 +1,5 @@
 name: vipa
-label: vipaOS
+label: vipa
 kind: platform
 version: 0.5.0
 description: The mouth of a KYF39 flip phone. Receive and send only.

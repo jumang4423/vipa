@@ -128,7 +128,7 @@ public class PollReceiver extends BroadcastReceiver {
 
             Notification.Builder nb = new Notification.Builder(ctx)
                     .setSmallIcon(android.R.drawable.ic_dialog_info)
-                    .setContentTitle("vipaOS")
+                    .setContentTitle("vipa")
                     .setContentText(one)
                     .setStyle(new Notification.BigTextStyle().bigText(text))
                     .setContentIntent(pi)

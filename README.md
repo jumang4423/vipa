@@ -28,7 +28,23 @@ https://github.com/jumang4423/vipa — read README.md and INSTALL.md, then run i
 That is all. The agent installs the plugin, the platform config, the phone app and, if you
 ask for it, the ngrok tunnel. It answers with one `NEXT` line and, if it needs you, `NEED` lines.
 
+## How it decides
+
+Nothing is scheduled by vipa itself. You register jobs in Hermes as you like — and
+`hermes-plugin/vipa/criteria.md`, the vow, decides whether a job may be delivered to the
+phone at all.
+
+Allowed: a deadline, a person waiting for an answer, a commitment, a change that alters
+today's plan.
+
+Refused: follower counts, likes, scores, streaks, rankings — anything that exists to make
+you check again. "Yesterday: +39 followers" is refused, even if you asked for it. A job that
+tells you someone you owe an answer to has written is allowed.
+
+Both `philosophy.md` and `criteria.md` are injected into the system prompt of every turn on
+this platform, so the agent carries them without being reminded.
+
 ## Status
 
-Still a chat. The judgment layer — criteria, dropping, the weekly audit — is not here yet.
-See [INSTALL.md](INSTALL.md) for the details.
+Still a chat. Criteria are enforced in the agent's judgment, not in code; dropping logs and
+the weekly audit are not implemented yet. See [INSTALL.md](INSTALL.md) for the details.

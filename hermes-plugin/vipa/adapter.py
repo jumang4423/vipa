@@ -80,8 +80,10 @@ class VipaAdapter(BasePlatformAdapter):
         super().__init__(config, Platform("vipa"))
         self.listen = extra_or_secret(config.extra, "listen", "VIPA_LISTEN") or "0.0.0.0:8099"
         self.groq_key = extra_or_secret(config.extra, "groq_api_key", "GROQ_API_KEY") or ""
-        self.chat_id = "vipa"
-        self.inject_rules = (extra_or_secret(config.extra, "inject_rules", "VIPA_INJECT_RULES") or "1") not in ("0", "false", "no")
+        # The session key follows chat_id, and a session keeps the system prompt it was
+        # born with. VIPA_CHAT makes a fresh one without touching the old history.
+        self.chat_id = extra_or_secret(config.extra, "chat", "VIPA_CHAT") or "vipa"
+        self.inject_rules = (extra_or_secret(config.extra, "inject_rules", "VIPA_INJECT_RULES") or "0") in ("1", "true", "yes")
 
         self._out = []
         self._seq = 0
@@ -168,7 +170,8 @@ class VipaAdapter(BasePlatformAdapter):
     def _deliver(self, text, user="vipa"):
         """Queue one message. The HTTP response never waits for the agent."""
         self._push("user", text)
-        if self.inject_rules:
+        if self.inject_rules and not text.startswith("/"):
+            # Slash commands (/new, /reset, ...) must reach the gateway untouched.
             text = RULES + "\n\n" + text
         source = self.build_source(
             chat_id=self.chat_id,

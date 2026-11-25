@@ -58,23 +58,27 @@ Relay those lines only. Do not summarise diffs, do not list what was copied.
 Inbound is acknowledged with `202` immediately; turns run on a serial queue. There is no
 push channel: the phone has no GMS.
 
-## Why the rules ride on the message
+## How the rules reach the agent
 
-On Hermes 0.23.4 a plugin platform's `platform_hint` did not reach a gateway session's prompt.
-Checked in this order: the registry entry carries the text (2022 chars);
-`agent.platform_hints.vipa.replace` resolves to it; `SOUL.md` is loaded per the code path — and
-still the agent answered "there is no such list in my instructions". The session row in
-`state.db` keeps only a prompt hash, so there is nothing to inspect after the fact.
+`philosophy.md` and `criteria.md` are read by `register()` and handed to Hermes as
+`platform_hint`, which lands in the system prompt of every turn on this platform. Verified:
+with a fresh session the agent answers "about ten days, and never send counts, streaks or
+scores" — that text only exists in those two files.
 
-So `adapter.py` prepends a short `[vipa] ...` block to every inbound message. It is ugly, and it
-is the only thing that held. Turn it off when the upstream wiring starts working:
+One catch: **a session keeps the system prompt it was born with.** The prompt is stored in
+`state.db.system_prompts` and reused by session, so editing the files afterwards changes
+nothing until a new session starts. Two ways to get one:
 
 ```
-VIPA_INJECT_RULES=0
+# a brand new chat (also keeps the old history intact)
+echo 'VIPA_CHAT=vipa2' >> ~/.hermes/.env
+
+# or, from the phone
+/new
 ```
 
-`philosophy.md` and `criteria.md` stay the source of truth. `install.sh` copies their text into
-`agent.platform_hints.vipa.replace`, and the shorter per-message block is the same rules condensed.
+If you cannot start a new session, `VIPA_INJECT_RULES=1` also carries a condensed version of
+the rules on every inbound message. Off by default; it is a fallback, not the design.
 
 ## Settings (`~/.hermes/.env`)
 

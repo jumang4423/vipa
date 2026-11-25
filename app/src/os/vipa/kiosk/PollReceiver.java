@@ -19,8 +19,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * 5分ごとに新着を見て、画面を見ていなければ通知する。
- * 画面が点いていてアプリが前面なら、SSE が画面を更新するので通知しない。
+ * Poll for new replies and notify when the phone is not being looked at.
+ * When the app is in front and the screen is on, the page updates itself.
  */
 public class PollReceiver extends BroadcastReceiver {
 
@@ -79,7 +79,7 @@ public class PollReceiver extends BroadcastReceiver {
             if (code != 200) return;
             JSONObject o = new JSONObject(read(conn.getInputStream()));
             int seq = o.optInt("last", 0);
-            if (seq < last) {                       // サーバーが再起動した
+            if (seq < last) {                       // the gateway restarted
                 sp.edit().putInt("lastSeq", 0).apply();
                 return;
             }
@@ -88,7 +88,7 @@ public class PollReceiver extends BroadcastReceiver {
             sp.edit().putInt("lastSeq", seq).apply();
             Log.i(TAG, "poll seq=" + seq + " last=" + last);
 
-            if (last == 0) return;                  // 初回は基準を作るだけ
+            if (last == 0) return;                  // first run only sets the baseline
 
             String text = null;
             for (int k = arr.length() - 1; k >= 0; k--) {

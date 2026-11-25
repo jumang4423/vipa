@@ -79,12 +79,12 @@
   <div class="thread" id="thread">
     <div class="typing" id="typing">
       <div class="flower"><b></b><b></b><b></b><b></b><b></b><b></b><i></i></div>
-      <span class="t" id="typing-text">考えています</span>
+      <span class="t" id="typing-text">Thinking</span>
     </div>
   </div>
 
 <script>
-/* 5秒ごとに /api/out を叩いて、新しい返答だけを描く */
+/* Poll /api/out every 5s and draw only what is new. */
 
 var API = (function () {
   var m = /[?&]u=([^&]+)/.exec(location.search);
@@ -98,7 +98,7 @@ var typing = document.getElementById('typing');
 var typingText = document.getElementById('typing-text');
 var since = 0, busy = false;
 
-/* ---------- markdown（記号だけ） ---------- */
+/* ---------- markdown (just enough) ---------- */
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
                   .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -146,8 +146,8 @@ function md(src) {
 }
 
 /* ---------- view ---------- */
-/* スクロールする箱は1つとは限らない（WebView の版で flex の高さが決まらない）。
-   thread が伸びている場合は document 側が動くので、両方を見る。 */
+/* The scroll container is not always the same one: on some WebViews the flex
+   height collapses and the document scrolls instead. Check both. */
 function threadScrolls() { return thread.scrollHeight > thread.clientHeight + 4; }
 
 function bottom() {
@@ -176,7 +176,7 @@ function addBubble(role, text) {
 }
 
 function showTyping(label) {
-  typingText.textContent = label || '考えています';
+  typingText.textContent = label || 'Thinking';
   typing.className = 'typing on';
   thread.appendChild(typing);
   bottom();
@@ -195,7 +195,7 @@ function poll() {
     try {
       var d = JSON.parse(x.responseText);
       var ms = d.messages || [];
-      if (d.last !== undefined && d.last < since) { since = 0; return; }  // 再起動
+      if (d.last !== undefined && d.last < since) { since = 0; return; }  // gateway restarted
       for (var i = 0; i < ms.length; i++) {
         addBubble(ms[i].role, ms[i].text);
         since = ms[i].seq;
@@ -208,12 +208,12 @@ function poll() {
   };
   x.onerror = x.ontimeout = function () {
     busy = false;
-    showTyping('接続待ち');
+    showTyping('Offline');
   };
   x.send();
 }
 
-/* ---------- Java から呼ばれる ---------- */
+/* ---------- called from Java ---------- */
 function sk(dy) { scrollByPx(dy); }
 
 function nextPage() {

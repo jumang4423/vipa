@@ -1,20 +1,19 @@
 """
-vipa: KYF39 端末を Hermes の口にする。
+vipa: the mouth of a KYF39 flip phone.
 
-受信 → handle_message()。送信 → 箱に積む（端末が5秒ごとに取りに来る）。
-UI も別サーバーも持たない。画面は APK の中。
-**標準ライブラリだけで動く**（aiohttp 等は使わない）。
+Inbound  -> handle_message(). Outbound -> an outbox the phone polls every 5s.
+No UI, no extra server, no third-party dependencies: stdlib only.
 
-    KYF39（アプリ）
-      POST /api/voice        声（Groq で文字起こし）→ エージェント
-      POST /api/in           文字 → エージェント
-      GET  /api/out?since=N  5秒ごとに返信を取る
-      POST /api/reset        箱を空にする
+    KYF39 (app)
+      POST /api/voice        audio -> Groq transcription -> agent
+      POST /api/in           {"text": "..."} -> agent
+      GET  /api/out?since=N  new messages
+      POST /api/reset        empty the outbox
       GET  /api/health
 
-環境変数（config.yaml の gateway.platforms.vipa.extra でも可）:
-    VIPA_LISTEN    待受。既定 0.0.0.0:8099
-    GROQ_API_KEY   音声を使うなら
+Settings (env, or gateway.platforms.vipa.extra in config.yaml):
+    VIPA_LISTEN     bind address. default 0.0.0.0:8099
+    GROQ_API_KEY    only needed for voice
 """
 import asyncio
 import json
@@ -43,9 +42,8 @@ CORS = {
 }
 
 
-
 def _ssl_context():
-    """CA バンドルを探す。certifi が無い環境（Hermes 同梱の Python など）でも通す。"""
+    """Find a CA bundle. Works where certifi is absent (e.g. Hermes' own Python)."""
     import ssl
     paths = []
     try:
@@ -75,7 +73,7 @@ class VipaAdapter(BasePlatformAdapter):
         self._out = []
         self._seq = 0
         self._lock = threading.Lock()
-        self._q = None            # asyncio.Queue（loop の中で作る）
+        self._q = None            # asyncio.Queue, created inside the loop
         self._loop = None
         self._worker = None
         self._server = None
@@ -115,7 +113,7 @@ class VipaAdapter(BasePlatformAdapter):
         self._mark_disconnected()
 
     async def _drain(self):
-        """エージェントの1ターンは長い。受信は即返し、ここで順番に走らせる。"""
+        """An agent turn takes minutes. Acknowledge fast, run turns in order here."""
         while True:
             event = await self._q.get()
             try:
@@ -142,15 +140,20 @@ class VipaAdapter(BasePlatformAdapter):
 
     def _since(self, since):
         with self._lock:
-            if since > self._seq:          # 再起動で番号が戻った → 取り直させる
+            if since > self._seq:          # the gateway restarted; resync the phone
                 since = 0
             rows = [m for m in self._out if m["seq"] > since]
             return {"messages": rows[-40:], "last": self._seq}
 
+    def _reset(self):
+        with self._lock:
+            del self._out[:]
+            self._seq = 0
+
     # ---------------------------------------------------------------- inbound
 
     def _deliver(self, text, user="vipa"):
-        """端末の入力を積む。受信の応答は待たせない。"""
+        """Queue one message. The HTTP response never waits for the agent."""
         self._push("user", text)
         source = self.build_source(
             chat_id=self.chat_id,
@@ -181,14 +184,9 @@ class VipaAdapter(BasePlatformAdapter):
     async def get_chat_info(self, chat_id):
         return {"name": "vipaOS", "type": "dm"}
 
-    # ---------------------------------------------------------------- stt
+    # ---------------------------------------------------------------- speech
 
-    async def _transcribe(self, audio, content_type):
-        return await asyncio.get_running_loop().run_in_executor(
-            None, self._transcribe_sync, audio, content_type)
-
-    def _transcribe_sync(self, audio, content_type):
-        import ssl
+    def _transcribe(self, audio, content_type):
         import urllib.request
 
         boundary = "----vipa%d" % int(time.time() * 1000)
@@ -197,14 +195,13 @@ class VipaAdapter(BasePlatformAdapter):
                 "filename=\"rec.m4a\"\r\nContent-Type: %s\r\n\r\n"
                 % (boundary, STT_MODEL, boundary, content_type)).encode()
         tail = ("\r\n--%s--\r\n" % boundary).encode()
-        ctx = _ssl_context()
 
         req = urllib.request.Request(
             GROQ_URL, data=head + audio + tail,
             headers={"Authorization": "Bearer " + self.groq_key,
-                     "User-Agent": "vipa/1.0",   # これが無いと Cloudflare が 403 で弾く
+                     "User-Agent": "vipa/1.0",   # without it Cloudflare answers 403
                      "Content-Type": "multipart/form-data; boundary=" + boundary})
-        with urllib.request.urlopen(req, timeout=90, context=ctx) as r:
+        with urllib.request.urlopen(req, timeout=90, context=_ssl_context()) as r:
             return json.load(r).get("text", "").strip()
 
     # ---------------------------------------------------------------- http
@@ -218,7 +215,6 @@ class VipaAdapter(BasePlatformAdapter):
             def log_message(self, *args):
                 return
 
-            # -- helpers
             def _send(self, code, obj):
                 body = json.dumps(obj, ensure_ascii=False).encode()
                 self.send_response(code)
@@ -238,7 +234,6 @@ class VipaAdapter(BasePlatformAdapter):
                     return b""
                 return self.rfile.read(n)
 
-            # -- routes
             def do_OPTIONS(self):
                 self._send(204, {})
 
@@ -278,15 +273,13 @@ class VipaAdapter(BasePlatformAdapter):
                     return
 
                 if path == "/api/reset":
-                    with adapter._lock:
-                        del adapter._out[:]
-                        adapter._seq = 0
+                    adapter._reset()
                     self._send(200, {"ok": True})
                     return
 
                 if path == "/api/voice":
                     if not adapter.groq_key:
-                        self._send(503, {"error": "GROQ_API_KEY がない"})
+                        self._send(503, {"error": "GROQ_API_KEY is not set"})
                         return
                     audio = self._body()
                     if len(audio) < 2000:
@@ -294,7 +287,7 @@ class VipaAdapter(BasePlatformAdapter):
                         return
                     ctype = self.headers.get("Content-Type") or "audio/mp4"
                     try:
-                        text = adapter._transcribe_sync(audio, ctype)
+                        text = adapter._transcribe(audio, ctype)
                     except Exception as e:
                         log.warning("vipa: stt failed: %s", e)
                         self._send(502, {"error": "stt: %s" % e})
@@ -324,11 +317,11 @@ def register(ctx):
         required_env=[],
         max_message_length=2000,
         platform_hint=(
-            "vipaOS は小さなガラホ端末（KYF39、480x854、タッチパネルなし、キー4つ）。"
-            "返答は短く1行を基本にし、絵文字を使わない。話しかけられたときだけ答える。"
+            "vipaOS is a tiny flip phone (KYF39): 480x854, no touchscreen, four keys. "
+            "Answer in one short line by default. No emoji. Only answer when spoken to."
         ),
     )
-    # 端末は家の中の1台。承認（ペアリング）を挟まない。
+    # One phone, at home. No pairing prompt.
     kwargs["allowed_users_env"] = "VIPA_ALLOWED_USERS"
     kwargs["allow_all_env"] = "VIPA_ALLOW_ALL_USERS"
     try:

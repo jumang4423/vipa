@@ -1,58 +1,64 @@
-# vipa plugin
+# vipa plugin for Hermes
 
-端末（KYF39）と Hermes をつなぐ口。**UI もサーバーも持たない。**
+Connects the KYF39 phone to Hermes. **No UI, no second server, no dependencies.**
 
-## エンドポイント
+## Endpoints
 
 | | |
 |---|---|
-| `GET /api/out?since=N` | 新しい返答を取る（端末が5秒ごと） |
-| `POST /api/in` | 文字を渡す `{"text":"..."}` |
-| `POST /api/voice` | 録音を渡す（`audio/mp4`）→ Groq で文字起こし |
-| `GET /api/health` | 生死 |
+| `POST /api/voice` | recorded audio (`audio/mp4`) → Groq transcription → agent |
+| `POST /api/in` | `{"text":"..."}` → agent |
+| `GET /api/out?since=N` | new messages (the phone polls every 5s) |
+| `POST /api/reset` | empty the outbox |
+| `GET /api/health` | liveness |
 
-`adapter.py` は**標準ライブラリだけで動く**（追加の pip 不要）。
+`GET /api/out` returns `{"messages":[{seq,role,text,ts}],"last":N}`; `role` is `user` or
+`assistant`. The phone feeds `last` back as `since`. If `since` is ahead of the counter
+(the gateway restarted), the box resyncs from 0.
 
-承認（ペアリング）は不要。`VIPA_ALLOW_ALL_USERS=1` を `install.sh` が入れる。
+Inbound is acknowledged with `202` immediately; the turn runs on a serial queue. No push
+notifications — the phone has no GMS.
 
-`GET /api/out` は `{"messages":[{seq,role,text,ts}],"last":N}` を返す。`role` は `user` か `assistant`。
-端末は `last` を次の `since` に使う。
+No pairing prompt: `VIPA_ALLOW_ALL_USERS=1` is all it needs. `adapter.py` uses the standard
+library only, so nothing has to be pip-installed into Hermes.
 
-## 置き方
+## Install
 
 ```bash
 cp -R hermes-plugin/vipa ~/.hermes/plugins/
 hermes plugins enable vipa
 ```
 
-`~/.hermes/config.yaml` に有効化を1ブロック足す（**これが無いと待受が開かない**）:
+Then add the platform to `~/.hermes/config.yaml` (without this the port never opens):
 
 ```yaml
 platforms:
   vipa:
     enabled: true
+    gateway_restart_notification: false
 ```
-
-`platforms:` が既にあるなら、その下に `vipa:` を足す。
 
 ```bash
 hermes gateway restart
 ```
 
-`~/.hermes/.env`（任意）:
+`install.sh` in the repo root does all of the above, plus the phone.
+
+## Settings (`~/.hermes/.env`)
 
 ```
 VIPA_LISTEN=0.0.0.0:8099
-GROQ_API_KEY=（音声を使うなら）
+GROQ_API_KEY=...                                   # voice only
+VIPA_ALLOW_ALL_USERS=1
 ```
 
-## 外から届かせる
+## Outside access
 
 ```bash
 ngrok http 8099
 ```
 
-出た URL を端末の `/sdcard/vipaos.url` に書く。
+Put the URL on the phone:
 
 ```bash
 echo 'https://xxxx.ngrok-free.app' > /tmp/vipa.url

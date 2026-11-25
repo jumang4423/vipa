@@ -23,8 +23,8 @@ import java.net.URL;
 /**
  * vipaOS terminal.
  *
- * 役割: 自宅サーバーが描いたチャットを表示し、声をサーバーに送る。
- * 左上=返信(録音) / 左下=戻る / 十字=スクロール / センター=次ページ
+ * Shows the chat the home machine serves, and uploads voice to it.
+ * top-left = reply (record) / bottom keys = jump to end / d-pad = scroll
  */
 public class MainActivity extends Activity {
 
@@ -36,7 +36,7 @@ public class MainActivity extends Activity {
     private WebView web;
     private int retry = 0;
     private final Handler handler = new Handler();
-    private final String[] skLabels = {"返信", "", "\u2193", ""};
+    private final String[] skLabels = {"Reply", "", "\u2193", ""};
 
     public static volatile boolean visible = false;
 
@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
                     host = new URL(SERVER).getHost();
                 } catch (Throwable ignored) {}
                 String failed = err == null ? null : err.getUrl();
-                // 2015 年の CA しか無い端末なので、自分のサーバーのホストだけ通す
+                // This phone only has 2015 CAs, so allow our own host only.
                 if (host != null && failed != null && failed.contains(host)) {
                     Log.i(TAG, "ssl: proceed " + failed);
                     handler.proceed();
@@ -128,7 +128,7 @@ public class MainActivity extends Activity {
     static final long POLL_MS = 5000L;
 
     static void scheduleNext(ContextLike c, long delayMs) {
-        // 使わない
+        // unused
     }
 
     private void schedulePoll() {
@@ -254,7 +254,7 @@ public class MainActivity extends Activity {
 
     // ------------------------------------------------------------ keys
 
-    /** 画面は APK の中。接続先だけ query で渡す。 */
+    /** The UI lives in the APK; only the server is passed in the query. */
     private String assetHome() {
         try {
             return "file:///android_asset/index.html?u="
@@ -264,7 +264,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** /sdcard/vipaos.url があればそれを使う。無ければ既定。 */
+    /** Use /sdcard/vipaos.url when present, else the built-in default. */
     private String resolveServer() {
         try {
             java.io.File f = new java.io.File("/sdcard/vipaos.url");
@@ -310,12 +310,12 @@ public class MainActivity extends Activity {
             if (c == KeyEvent.KEYCODE_DPAD_RIGHT) {
                 web.loadUrl("javascript:sk(" + dip(280) + ")"); return true;
             }
-            if (c == KeyEvent.KEYCODE_F1) {          // 左上
+            if (c == KeyEvent.KEYCODE_F1) {          // top-left soft key
                 toggleVoice(); return true;
             }
             if (c == KeyEvent.KEYCODE_F2 || c == KeyEvent.KEYCODE_F3
                     || c == KeyEvent.KEYCODE_F4
-                    || c == KeyEvent.KEYCODE_BACK) {          // 下段キーは全部「下まで」
+                    || c == KeyEvent.KEYCODE_BACK) {          // lower keys: jump to the end
                 web.loadUrl("javascript:bottom()"); return true;
             }
             Log.i(TAG, "DKEY " + c + " " + KeyEvent.keyCodeToString(c));
@@ -350,17 +350,17 @@ public class MainActivity extends Activity {
             File f = recFile();
             if (f.exists()) f.delete();
             rec.start(f);
-            setSk(0, "■ 停止");
+            setSk(0, "■ Stop");
             Log.i(TAG, "rec start");
         } catch (Throwable t) {
             Log.i(TAG, "rec FAIL " + t);
             rec.release();
-            setSk(0, "返信");
+            setSk(0, "Reply");
         }
     }
 
     private void stopVoice() {
-        setSk(0, "返信");
+        setSk(0, "Reply");
         web.loadUrl("javascript:showTyping()");
         new Thread(new Runnable() {
             public void run() {
@@ -401,8 +401,8 @@ public class MainActivity extends Activity {
             String body = read(code >= 400 ? c.getErrorStream() : c.getInputStream());
             Log.i(TAG, "voice http=" + code + " " + body);
             ok = code < 400;
-            if (code == 503) why = "音声は未設定（GROQ_API_KEY が無い）";
-            else if (!ok) why = "音声を送れない: " + body;
+            if (code == 503) why = "Voice is not set up (no GROQ_API_KEY)";
+            else if (!ok) why = "Cannot send voice: " + body;
         } catch (Throwable t) {
             Log.i(TAG, "voice FAIL " + t);
         } finally {
@@ -463,12 +463,12 @@ public class MainActivity extends Activity {
                 + "<style>html,body{margin:0;background:#000;color:#fff;"
                 + "font-family:sans-serif}div{padding:16px;font-size:19px;line-height:1.7}"
                 + ".s{color:#777;font-size:15px;margin-top:18px}</style></head><body><div>"
-                + "サーバーに接続できません。<br>メニューキーで再試行します。"
+                + "Cannot reach the server.<br>Press the menu key to retry."
                 + "<div class='s'>" + safe + "</div>"
                 + "</div></body></html>";
     }
 
-    /** MediaRecorder の薄いラッパ（null 安全のため）。 */
+    /** Thin MediaRecorder wrapper (null-safe). */
     static class MediaRecorderHolder {
         android.media.MediaRecorder mr;
         volatile boolean recording;

@@ -6,7 +6,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 
-/** 起動時にアプリを立ち上げ、ポーリングのアラームを張り直す。 */
+/** Start the app on boot and re-arm the polling alarm. */
 public class BootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context c, Intent i) {

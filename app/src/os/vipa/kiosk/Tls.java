@@ -10,10 +10,9 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
 /**
- * この端末（Android 5.1）は 2015 年時点の CA しか持っていない。
- * ngrok などが使う Let's Encrypt のルートは入っていないので、検証に失敗する。
- *
- * 失敗したときだけ、その接続に限って検証を緩める（ホスト名の確認は残す）。
+ * This phone (Android 5.1) only ships CAs from 2015, so it cannot verify the
+ * Let's Encrypt roots behind ngrok. Relax verification for a single connection
+ * (hostname checks stay on).
  */
 final class Tls {
 

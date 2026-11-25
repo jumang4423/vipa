@@ -1,14 +1,14 @@
 name: vipa
 label: vipaOS
 kind: platform
-version: 0.4.0
-description: KYF39 端末の口。受信と送信だけ。標準ライブラリのみ。
+version: 0.5.0
+description: The mouth of a KYF39 flip phone. Receive and send only.
 author: jumang4423
 
 optional_env:
   - name: VIPA_LISTEN
-    description: "待受。既定 0.0.0.0:8099"
+    description: "Bind address. Default 0.0.0.0:8099"
     password: false
   - name: GROQ_API_KEY
-    description: "音声入力を使う場合のみ"
+    description: "Only needed for voice input"
     password: true

@@ -81,9 +81,12 @@ class VipaAdapter(BasePlatformAdapter):
         super().__init__(config, Platform("vipa"))
         self.listen = extra_or_secret(config.extra, "listen", "VIPA_LISTEN") or "0.0.0.0:8099"
         self.groq_key = extra_or_secret(config.extra, "groq_api_key", "GROQ_API_KEY") or ""
-        # The session key follows chat_id, and a session keeps the system prompt it was
-        # born with. VIPA_CHAT makes a fresh one without touching the old history.
-        self.chat_id = extra_or_secret(config.extra, "chat", "VIPA_CHAT") or "vipa"
+        # A session keeps the system prompt it was born with, so the rules only reach the
+        # agent when a new session starts. Deriving the chat id from the rules themselves
+        # means: edit philosophy.md or criteria.md, restart, and the next turn runs in a
+        # fresh session that has read them. VIPA_CHAT still overrides, if you want to pin it.
+        self.chat_id = (extra_or_secret(config.extra, "chat", "VIPA_CHAT")
+                        or "vipa-" + _rules_id())
         self.inject_rules = (extra_or_secret(config.extra, "inject_rules", "VIPA_INJECT_RULES") or "0") in ("1", "true", "yes")
 
         self._out = []
@@ -360,6 +363,19 @@ def platform_hint() -> str:
     text = "\n\n".join(p for p in parts if p)
     return text or ("vipa is a tiny flip phone (KYF39): 480x854, no touchscreen, four keys. "
                     "Answer in one short line. No emoji. Only what is actually owed today.")
+
+
+def _rules_id():
+    """Short digest of philosophy.md + criteria.md, stable across restarts."""
+    import hashlib
+    h = hashlib.sha256()
+    for name in ("philosophy.md", "criteria.md"):
+        try:
+            with open(os.path.join(HERE, name), "rb") as f:
+                h.update(f.read())
+        except OSError:
+            pass
+    return h.hexdigest()[:6]
 
 
 def _endpoint(config, path):

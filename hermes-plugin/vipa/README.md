@@ -48,7 +48,7 @@ hermes gateway restart
 
 ```
 VIPA_LISTEN=0.0.0.0:8099
-GROQ_API_KEY=...                                   # voice only
+GROQ_API_KEY=...                                   # required (voice is the only input)
 VIPA_ALLOW_ALL_USERS=1
 ```
 

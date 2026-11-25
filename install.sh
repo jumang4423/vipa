@@ -206,7 +206,7 @@ else
 fi
 
 grep -q '^GROQ_API_KEY=.' "$ENV" 2>/dev/null || {
-  printf '  NEED: GROQ_API_KEY (voice only). Get one at https://console.groq.com/keys and add it to ~/.hermes/.env — or hand it over and I will.\n'
+  printf '  NEED: GROQ_API_KEY. The phone has no usable keyboard, so voice is its only input and Groq does the transcription. Without it the phone cannot send anything. Get one at https://console.groq.com/keys, or hand it over and I will add it.\n'
 }
 
 if [ "${VIPA_NGROK:-0}" = "1" ] && [ -z "${NGTUNNEL:-}" ]; then

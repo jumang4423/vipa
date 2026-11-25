@@ -10,5 +10,5 @@ optional_env:
     description: "Bind address. Default 0.0.0.0:8099"
     password: false
   - name: GROQ_API_KEY
-    description: "Only needed for voice input"
+    description: "Required: voice is the phone's only input"
     password: true

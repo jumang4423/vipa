@@ -13,7 +13,7 @@ No UI, no extra server, no third-party dependencies: stdlib only.
 
 Settings (env, or gateway.platforms.vipa.extra in config.yaml):
     VIPA_LISTEN     bind address. default 0.0.0.0:8099
-    GROQ_API_KEY    only needed for voice
+    GROQ_API_KEY    required: voice is the phone's only input
 """
 import asyncio
 import json
@@ -279,7 +279,7 @@ class VipaAdapter(BasePlatformAdapter):
 
                 if path == "/api/voice":
                     if not adapter.groq_key:
-                        self._send(503, {"error": "GROQ_API_KEY is not set"})
+                        self._send(503, {"error": "GROQ_API_KEY is not set; the phone cannot send voice"})
                         return
                     audio = self._body()
                     if len(audio) < 2000:

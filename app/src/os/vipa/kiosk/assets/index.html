@@ -97,9 +97,10 @@
     background:#000;padding:12px 10px}
   .type.on{display:block}
   .type .row{display:-webkit-box;display:flex;align-items:flex-start}
-  .type input{width:100%;box-sizing:border-box;background:#101010;color:#f2f2f2;
-    border:1px solid #2a2a2a;border-radius:10px;padding:11px 12px;font-size:17px;
-    font-family:inherit;outline:none}
+  .type .box{width:100%;min-height:46px;box-sizing:border-box;background:#101010;
+    color:#f2f2f2;border:1px solid #2a2a2a;border-radius:10px;padding:11px 12px;
+    font-size:18px;line-height:1.4;word-break:break-all}
+  .type .box b{color:#8a8a8a;font-weight:400}
   .type .hint{font-size:11px;color:#6f6f6f;margin-top:10px;letter-spacing:.04em}
   .type .prev{font-size:12px;color:#8a8a8a;margin-top:14px;line-height:1.5}
 
@@ -154,9 +155,8 @@
   <img class="hd" src="header.png" alt="">
 
   <div class="type" id="type">
-    <div class="row"><input id="type-in" type="text" autocomplete="off" autocorrect="off"
-      autocapitalize="off" spellcheck="false" placeholder="type here"></div>
-    <div class="hint">center = send &nbsp;&nbsp; Text = close</div>
+    <div class="row"><div id="type-box" class="box"><span id="type-val"></span><b id="caret">|</b></div></div>
+    <div class="hint">1-9 = かな (tap again to cycle) &nbsp; 0 = わをん &nbsp; # = 数字 &nbsp; * = 削除<br>center = send &nbsp;&nbsp; Text = close</div>
     <div class="prev" id="type-prev"></div>
   </div>
 
@@ -543,39 +543,100 @@ function renderHealth() {
 /* left/right: change day on the health screen, scroll anywhere else */
 function navLR(dir) { scrollByPx(dir * 280); }
 
-/* ---------- text input (top-right soft key) ---------- */
+/* ---------- text input: the keypad sends digits, so かな is multi-tap ---------- */
 var typeEl = document.getElementById('type');
-var typeIn = document.getElementById('type-in');
+var typeVal = document.getElementById('type-val');
 var typePrev = document.getElementById('type-prev');
 var typeOn = false;
+var typeText = '';        // committed text
+var pendingRow = null;    // row currently being cycled
+var pendingIdx = 0;
+var pendingAt = 0;
+var numeric = false;
+
+var ROWS = {
+  '1': 'あいうえお', '2': 'かきくけこ', '3': 'さしすせそ', '4': 'たちつてと',
+  '5': 'なにぬねの', '6': 'はひふへほ', '7': 'まみむめも', '8': 'やゆよ',
+  '9': 'らりるれろ', '0': 'わをんー'
+};
+
+function paintType() {
+  typeVal.textContent = typeText + (pendingRow ? pendingRow[pendingIdx] : '');
+}
+
+function commitPending() {
+  if (pendingRow) {
+    typeText += pendingRow[pendingIdx];
+    pendingRow = null;
+    pendingIdx = 0;
+  }
+}
+
+function typeKey(ch) {
+  if (ch >= '0' && ch <= '9' && !numeric) {
+    var row = ROWS[ch];
+    var now = Date.now();
+    if (pendingRow && pendingRow === row && now - pendingAt < 1200) {
+      pendingIdx = (pendingIdx + 1) % row.length;
+    } else {
+      commitPending();
+      pendingRow = row;
+      pendingIdx = 0;
+    }
+    pendingAt = now;
+    paintType();
+    return true;
+  }
+  if (numeric && ch >= '0' && ch <= '9') {
+    commitPending(); typeText += ch; paintType(); return true;
+  }
+  return false;
+}
+
+function backspace() {
+  if (pendingRow) { pendingRow = null; pendingIdx = 0; paintType(); return; }
+  typeText = typeText.slice(0, -1);
+  paintType();
+}
 
 function toggleText() {
   typeOn = !typeOn;
   typeEl.className = typeOn ? 'type on' : 'type';
   if (typeOn) {
-    view = 0; applyView();
-    typeEl.className = 'type on';
-    typeIn.value = '';
-    var last = '';
+    view = 0; applyView(); typeEl.className = 'type on';
+    typeText = ''; pendingRow = null;
+    paintType();
     var bubbles = thread.getElementsByClassName('b');
-    if (bubbles.length) last = bubbles[bubbles.length - 1].textContent.slice(0, 80);
-    typePrev.textContent = last ? 'last: ' + last : '';
-    try { typeIn.focus(); } catch (e) {}
-  } else {
-    try { typeIn.blur(); } catch (e) {}
+    typePrev.textContent = bubbles.length
+      ? 'last: ' + bubbles[bubbles.length - 1].textContent.slice(0, 80) : '';
   }
 }
 
 function sendText() {
-  var t = (typeIn.value || '').replace(/\s+$/, '');
+  commitPending();
+  var t = typeText.replace(/^\s+|\s+$/g, '');
   if (!t) { return; }
   var x = new XMLHttpRequest();
   x.open('POST', API + '/api/in', true);
   x.setRequestHeader('Content-Type', 'application/json');
   x.send(JSON.stringify({ text: t }));
-  typeIn.value = '';
-  toggleText();          // close and go back to the thread
+  typeText = '';
+  toggleText();
 }
+
+/* the keypad types into this page while the overlay is open */
+document.addEventListener('keydown', function (e) {
+  if (!typeOn) return;
+  var k = e.key;
+  if (e.keyCode === 8 || e.keyCode === 46 || e.keyCode === 67) {             // DEL / Backspace
+    backspace(); e.preventDefault(); return;
+  }
+  if (e.keyCode === 17) { backspace(); e.preventDefault(); return; }        // STAR
+  if (e.keyCode === 18) { numeric = !numeric; paintType(); e.preventDefault(); return; }  // POUND
+  if (k === '#' || k === '*') { if (k === '*') numeric = !numeric; paintType(); e.preventDefault(); return; }
+  if (typeKey(k)) { e.preventDefault(); return; }
+  if (k && k.length === 1) { commitPending(); typeText += k; paintType(); e.preventDefault(); }
+});
 
 /* ---------- called from Java ---------- */
 function sk(dy) { scrollByPx(dy); }

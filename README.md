@@ -41,6 +41,16 @@ https://github.com/jumang4423/vipa — read README.md and INSTALL.md, then run i
 That is all. The agent installs the plugin, the platform config, the phone app and, if you
 ask for it, the ngrok tunnel. It answers with one `NEXT` line and, if it needs you, `NEED` lines.
 
+One of those needs you: the gateway has to restart before the plugin loads, and Hermes refuses
+that from inside its own session. The agent will hand you one line — run it in a normal
+terminal:
+
+```
+cd ~/vipa && ./restart.sh
+```
+
+Two seconds later `/tmp/vipa-restart.txt` says `ok`. Nothing else is manual.
+
 ## How it decides
 
 Nothing is scheduled by vipa itself. You register jobs in Hermes as you like — and

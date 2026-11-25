@@ -34,8 +34,9 @@ push channel (no GMS), so it asks for new messages every five seconds.
 
 ## Three screens
 
-The phone has two keys worth naming: **Reply** (top left) records, **Switch** (right) turns
-the page. Thread → routine → health → thread.
+Three keys, one row each: **Voice** (top left) records, **Switch** (top right) turns the page —
+thread → routine → health → thread — and **Text** (bottom left) opens a field for when you
+cannot speak, like on a train. Centre sends, Text closes.
 
 - **the thread** — what the agent decided to send. Empty means empty: it says "No messages"
   and nothing else.

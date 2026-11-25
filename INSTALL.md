@@ -240,6 +240,8 @@ adb shell am start -n os.vipa.kiosk/.MainActivity
 - No touchscreen. Four keys: left soft key records/stops, lower keys jump to the end, the
   D-pad scrolls, the centre key pages.
 - 480×854 at 240dpi, system font scale 1.45 — the page sets `textZoom(100)`.
+- Soft keys: A1 Voice (F1), A2 Switch (F2), A3 Text (F3; the press also emits F4, which is
+  swallowed), A4 unused.
 
 ## Rebuilding the app
 

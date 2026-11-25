@@ -364,6 +364,10 @@ class VipaAdapter(BasePlatformAdapter):
                     if not text:
                         self._send(400, {"error": "empty"})
                         return
+                    if adapter.is_noise(text):
+                        log.info("vipa: dropped system notice (push): %s", text[:60])
+                        self._send(200, {"ok": True, "dropped": True})
+                        return
                     adapter._push("assistant", text)
                     self._send(202, {"ok": True})
                     return

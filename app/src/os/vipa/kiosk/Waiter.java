@@ -18,7 +18,6 @@ final class Waiter {
 
     private static final String TAG = "VIPA";
     private static final int HOLD = 240;             // seconds the server may hold the request
-    private static final long SAFE_ALARM = 15 * 60 * 1000L;
     private static final long STALE = 20 * 60 * 1000L;
 
     private static Thread thread;

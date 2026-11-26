@@ -63,8 +63,9 @@ Relay those lines only. Do not summarise diffs, do not list what was copied.
   agent. **The phone has no usable keyboard, so this is the only real input path.** No
   `GROQ_API_KEY` means the phone cannot send anything at all: `/api/voice` returns `503`.
 - `POST /api/in` — `{"text":"..."}`. For curl and tests; the phone does not use it.
-- `GET /api/out?since=N` — `{"messages":[{seq,role,text,ts}],"last":N}`. The phone polls every
-  5 seconds. If `since` is ahead of the counter (gateway restarted) the box resyncs from 0.
+- `GET /api/out?since=N` — `{"messages":[{seq,role,text,ts}],"last":N}`. The phone polls on a
+  schedule that follows the battery (see "Polling" below). If `since` is ahead of the counter
+  (gateway restarted) the box resyncs from 0.
 - `POST /api/reset` — empties the outbox.
 - `GET /api/health` — `{"ok":true,"seq":N,"stt":true|false}`. `stt:false` means no Groq key.
 
@@ -313,6 +314,27 @@ display:
 
 The adapter also drops anything that still looks like a notice (⏳ Working, iteration N/M,
 "Self-improvement review", "[interrupt: …]") — defence in depth, not the fix.
+
+## Polling
+
+There is no push channel (no GMS), so the phone asks. The interval is chosen from the battery
+state rather than fixed, because a fixed one either wastes the phone or feels slow:
+
+| state | interval |
+|---|---|
+| screen open, on battery | 2 s |
+| screen open, charging | 1 s |
+| screen closed, on battery | 60 s (a notification may arrive up to a minute late) |
+| screen closed, charging | 1 s |
+
+While the screen is open the page polls and the background alarm stands down, so there is never
+a doubled request. `MainActivity.pollIntervalMs()` owns the alarm, `setPollMs()` tells the page
+what to use, and `ACTION_BATTERY_CHANGED` / `ACTION_POWER_*` re-evaluate both the moment the
+cable goes in or out.
+
+Why it matters: each request wakes the radio (TLS handshake ~0.13 s, ~2 J per request on LTE).
+Asking every 5 s around the clock is 17,280 wake-ups a day, roughly 9.6 Wh against a ~4 Wh
+battery — under a day of standby. At 60 s it is 0.8 Wh/day, which is the phone's normal life.
 
 ## Known limits of the phone
 

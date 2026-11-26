@@ -176,7 +176,8 @@ var API = (function () {
   return m ? decodeURIComponent(m[1]) : 'http://127.0.0.1:8099';
 })();
 
-var POLL_MS = 2000;   // the phone asks twice as often: an answer lands ~1.5s sooner on average
+var POLL_MS = 2000;      // set by Java: 2s on battery, 1s while charging
+var POLL_HIDDEN = 60000; // nobody is looking: ask once a minute
 
 var thread = document.getElementById('thread');
 var typing = document.getElementById('typing');
@@ -549,9 +550,20 @@ function nextPage() {
   }
 }
 
+function setPollMs(ms) {
+  if (ms > 0) POLL_MS = ms;
+}
+
+function pollLoop() {
+  setTimeout(function () {
+    if (!document.hidden) poll();
+    pollLoop();
+  }, document.hidden ? POLL_HIDDEN : POLL_MS);
+}
+
 window.addEventListener('load', function () {
   poll();
-  setInterval(poll, POLL_MS);
+  pollLoop();
   setInterval(function () { if (schedOn) renderSchedule(); }, 30000);
 });
 </script>

@@ -145,13 +145,54 @@ public class MainActivity extends Activity {
         handler.postDelayed(new Runnable() {
             public void run() { applySoftkeys(); }
         }, 700);
+        refreshCharging();
+        watchPower();
         schedulePoll();
     }
 
-    static final long POLL_MS = 5000L;
+    // Foreground polling is driven from the page (2s, or 1s while charging).
+    // Background polling (notifications) follows the same rule, coarser when on battery.
+    static volatile boolean charging = false;
 
-    static void scheduleNext(ContextLike c, long delayMs) {
-        // unused
+    static long pollIntervalMs() {
+        return charging ? 1000L : 60000L;
+    }
+
+    private void refreshCharging() {
+        try {
+            android.content.Intent i = registerReceiver(null,
+                    new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED));
+            int status = i == null ? -1
+                    : i.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1);
+            charging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING
+                    || status == android.os.BatteryManager.BATTERY_STATUS_FULL;
+        } catch (Throwable t) {
+            charging = false;
+        }
+        Log.i(TAG, "charging=" + charging + " poll=" + pollIntervalMs() + "ms");
+    }
+
+    private void watchPower() {
+        try {
+            android.content.BroadcastReceiver r = new android.content.BroadcastReceiver() {
+                @Override
+                public void onReceive(android.content.Context c, android.content.Intent i) {
+                    refreshCharging();
+                    final int ms = charging ? 1000 : 2000;
+                    if (web != null) handler.post(new Runnable() {
+                        public void run() { web.loadUrl("javascript:setPollMs(" + ms + ")"); }
+                    });
+                }
+            };
+            android.content.IntentFilter f =
+                    new android.content.IntentFilter(android.content.Intent.ACTION_POWER_CONNECTED);
+            f.addAction(android.content.Intent.ACTION_POWER_DISCONNECTED);
+            // some handsets do not broadcast the power actions; every battery change is a hint
+            f.addAction(android.content.Intent.ACTION_BATTERY_CHANGED);
+            registerReceiver(r, f);
+        } catch (Throwable t) {
+            Log.i(TAG, "watchPower FAIL " + t);
+        }
     }
 
     private void schedulePoll() {
@@ -162,22 +203,30 @@ public class MainActivity extends Activity {
             android.app.PendingIntent pi =
                     android.app.PendingIntent.getBroadcast(this, 0, i, 0);
             am.setExact(android.app.AlarmManager.RTC_WAKEUP,
-                    System.currentTimeMillis() + POLL_MS, pi);
-            Log.i(TAG, "next poll in " + POLL_MS + "ms");
+                    System.currentTimeMillis() + pollIntervalMs(), pi);
+            Log.i(TAG, "next poll in " + pollIntervalMs() + "ms");
         } catch (Throwable t) {
             Log.i(TAG, "alarm FAIL " + t);
         }
     }
 
-    interface ContextLike {}
-
     @Override
     protected void onResume() {
         super.onResume();
         visible = true;
+        refreshCharging();
         if (web != null && pageReady) handler.post(new Runnable() {
-            public void run() { web.loadUrl("javascript:poll()"); }
+            public void run() {
+                web.loadUrl("javascript:setPollMs(" + (charging ? 1000 : 2000) + ")");
+                web.loadUrl("javascript:poll()");
+            }
         });
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean has) {
+        super.onWindowFocusChanged(has);
+        if (has) { applySoftkeys(); refreshCharging(); }
     }
 
     @Override
@@ -380,12 +429,6 @@ public class MainActivity extends Activity {
             return true;
         }
         return super.onKeyDown(keyCode, e);
-    }
-
-    @Override
-    public void onWindowFocusChanged(boolean has) {
-        super.onWindowFocusChanged(has);
-        if (has) applySoftkeys();
     }
 
     // ------------------------------------------------------------ voice

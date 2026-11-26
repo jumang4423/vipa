@@ -56,7 +56,7 @@ public class PollReceiver extends BroadcastReceiver {
                         android.app.PendingIntent np = android.app.PendingIntent
                                 .getBroadcast(ctx, 0, ni, 0);
                         am.setExact(android.app.AlarmManager.RTC_WAKEUP,
-                                System.currentTimeMillis() + MainActivity.POLL_MS, np);
+                                System.currentTimeMillis() + MainActivity.pollIntervalMs(), np);
                     } catch (Throwable t) {
                         Log.i(TAG, "reschedule FAIL " + t);
                     }
@@ -66,6 +66,8 @@ public class PollReceiver extends BroadcastReceiver {
     }
 
     private void poll(Context ctx) throws Exception {
+        // The screen is open: the page polls on its own, so do not ask twice.
+        if (MainActivity.visible) return;
         SharedPreferences sp = ctx.getSharedPreferences("vipa", 0);
         int last = sp.getInt("lastSeq", 0);
         HttpURLConnection conn = null;

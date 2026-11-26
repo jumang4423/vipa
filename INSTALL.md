@@ -231,6 +231,34 @@ adb shell am force-stop os.vipa.kiosk
 adb shell am start -n os.vipa.kiosk/.MainActivity
 ```
 
+## Tools the agent must keep
+
+Registering this plugin's tools into the toolset name `hermes-vipa` (the implicit default
+toolset name for a plugin platform) makes that name a *real* bundle. Hermes then stops falling
+back to the broad default and hands the agent only these three tools — no web search, no
+browser, no terminal. Everything the agent could do before disappears, and it reports that it
+"has no such tool".
+
+Keep it explicit:
+
+```yaml
+platform_toolsets:
+  vipa: [hermes-cli, hermes-vipa]
+```
+
+### Web search (no key needed)
+
+`web_search` needs one backend. DuckDuckGo's `ddgs` needs no key. Install it into the gateway's
+own venv (the one in the launchd plist PATH):
+
+```bash
+PY=/Users/you/.hermes/installs/<id>/environments/<id>/venv/bin/python
+uv pip install --python "$PY" ddgs
+```
+
+Restart the gateway afterwards. Verified: `web_search` answers, and the `browser` toolset opens
+pages (including JS-rendered ones) with a real Chromium on the host.
+
 ## Known limits of the phone
 
 - Android 5.1, no GMS, no Play Services. Polling only.

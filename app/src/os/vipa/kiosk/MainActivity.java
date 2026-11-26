@@ -168,6 +168,9 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         visible = true;
+        if (web != null) handler.post(new Runnable() {
+            public void run() { web.loadUrl("javascript:poll()"); }
+        });
     }
 
     @Override
@@ -387,13 +390,13 @@ public class MainActivity extends Activity {
         } catch (Throwable t) {
             Log.i(TAG, "rec FAIL " + t);
             rec.release();
-            setSk(0, "Reply");
+            setSk(0, "Voice");
             web.loadUrl("javascript:hideRecording()");
         }
     }
 
     private void stopVoice() {
-        setSk(0, "Reply");
+        setSk(0, "Voice");
         web.loadUrl("javascript:hideRecording()");
         web.loadUrl("javascript:showTyping()");
         new Thread(new Runnable() {

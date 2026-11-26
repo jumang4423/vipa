@@ -290,6 +290,7 @@ function showTyping(label) {
     typingTimer = setInterval(function () {
       if (typing.className.indexOf('on') < 0) return;
       var s = Math.floor((Date.now() - typingSince) / 1000);
+      if (s > 120) { hideTyping(); return; }
       typingText.textContent = base + (s > 3 ? ' \u00b7 ' + s + 's' : '');
     }, 1000);
   }

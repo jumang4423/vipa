@@ -475,8 +475,8 @@ class VipaAdapter(BasePlatformAdapter):
             self._fresh = False
             prev = getattr(self, "_previous", "")
             if prev:
-                text = ("[vipa] これは新しいセッション。前のセッションIDは %s。"
-                        "文脈が足りないと感じたら session_search でそのIDを調べる。\n\n%s"
+                text = ("[vipa] This is a new session. The previous one was %s. "
+                        "If you are missing context, look it up with session_search.\n\n%s"
                         % (prev, text))
         self._push("user", text)
         if self.inject_rules and not text.startswith("/"):

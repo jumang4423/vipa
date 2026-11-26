@@ -303,7 +303,6 @@ class VipaAdapter(BasePlatformAdapter):
         self._q = None            # asyncio.Queue, created inside the loop
         self._loop = None
         self._worker = None
-        self._session_day = None
         self._last_activity = None
         self._server = None
         self._thread = None
@@ -327,17 +326,15 @@ class VipaAdapter(BasePlatformAdapter):
                                         name="vipa-http", daemon=True)
         self._thread.start()
         self._worker = asyncio.ensure_future(self._drain())
-        self._session_day = self._cycle_day()
         self._mark_connected()
-        log.info("vipa: listening on %s (idle reset %s min, reset hour %s)",
-                 self.listen, self._idle_minutes(), self._reset_hour())
+        self._log_sessions()
+        log.info("vipa: listening on %s (session %s)", self.listen, self.chat_id)
         return True
 
     async def disconnect(self) -> None:
         if self._worker is not None:
             self._worker.cancel()
             self._worker = None
-        self._session_day = None
         self._last_activity = None
         if self._server is not None:
             self._server.shutdown()
@@ -345,64 +342,42 @@ class VipaAdapter(BasePlatformAdapter):
             self._server = None
         self._mark_disconnected()
 
+    def _log_sessions(self):
+        try:
+            rows = _recent_sessions()
+        except Exception:
+            rows = ""
+        if rows:
+            log.info("vipa: %d past session(s) on file", rows.count("- vipa"))
+
+    def _remember_session(self, chat_id):
+        """Keep the ids of past sessions, so the agent can look something up later."""
+        import datetime
+        path = os.path.join(os.path.dirname(DAYS), "sessions.json")
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = []
+        data.append({"chat_id": chat_id,
+                     "at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")})
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data[-50:], f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            log.warning("vipa: cannot write sessions.json: %s", e)
+
     def _rotate_session(self, clear=False):
         """Start a fresh session: the prompt is rebuilt from the current rules.
 
-        Nothing is pushed to the phone. With clear=False the outbox is left alone as well,
-        so a midnight rotation is invisible to someone asleep.
+        The previous id is kept on disk and named in the prompt, so nothing is lost for good.
         """
         base = self.chat_id.split("-")[0] or "vipa"
+        self._remember_session(self.chat_id)
         self.chat_id = "%s-%d" % (base, int(time.time()))
         if clear:
             self._reset()
         log.info("vipa: new session chat_id=%s (cleared=%s)", self.chat_id, clear)
-
-    def _cycle_day(self):
-        """Which 'day' the session belongs to, given VIPA_RESET_HOUR (default midnight)."""
-        import datetime
-        hour = int(extra_or_secret(getattr(self.config, "extra", {}) or {}, "reset_hour",
-                                   "VIPA_RESET_HOUR") or 0)
-        now = datetime.datetime.now()
-        return (now - datetime.timedelta(hours=hour)).date()
-
-    def _reset_hour(self):
-        raw = extra_or_secret(getattr(self.config, "extra", {}) or {}, "reset_hour",
-                              "VIPA_RESET_HOUR")
-        try:
-            return int(raw) if raw not in (None, "") else 0
-        except ValueError:
-            return 0
-
-    def _idle_minutes(self):
-        raw = extra_or_secret(getattr(self.config, "extra", {}) or {}, "idle_reset_min",
-                              "VIPA_IDLE_RESET_MIN")
-        try:
-            return float(raw) if raw not in (None, "") else 60.0
-        except ValueError:
-            return 60.0
-
-    def _rotate_if_new_day(self):
-        """Called on every inbound message: a new day, or a long silence, starts a new session.
-
-        Cheap, and it survives sleep and restarts — unlike a timer that has to stay awake.
-        """
-        if (extra_or_secret(getattr(self.config, "extra", {}) or {}, "daily_reset",
-                            "VIPA_DAILY_RESET") or "1") in ("0", "false", "no"):
-            return
-        today = self._cycle_day()
-        if self._session_day is None:
-            self._session_day = today
-            return
-        if today != self._session_day:
-            self._session_day = today
-            self._rotate_session()
-            return
-        idle = self._idle_minutes()
-        if idle > 0 and self._last_activity is not None:
-            gap = (time.time() - self._last_activity) / 60.0
-            if gap >= idle:
-                log.info("vipa: idle %.0f min -> new session", gap)
-                self._rotate_session()
 
     async def _drain(self):
         """An agent turn takes minutes. Acknowledge fast, run turns in order here."""
@@ -458,10 +433,6 @@ class VipaAdapter(BasePlatformAdapter):
 
     def _deliver(self, text, user="vipa"):
         """Queue one message. The HTTP response never waits for the agent."""
-        try:
-            self._rotate_if_new_day()
-        except Exception as e:
-            log.warning("vipa: daily rotation check failed: %s", e)
         self._last_activity = time.time()
         self._push("user", text)
         if self.inject_rules and not text.startswith("/"):
@@ -665,7 +636,6 @@ class VipaAdapter(BasePlatformAdapter):
 
                 if path == "/api/rotate":
                     # start a fresh session now; the screen and the outbox are untouched
-                    adapter._session_day = adapter._cycle_day()
                     adapter._rotate_session()
                     self._send(200, {"ok": True, "chat_id": adapter.chat_id})
                     return
@@ -756,9 +726,29 @@ def _routine():
     return "\n".join(lines)
 
 
+def _recent_sessions():
+    """The last few session ids, for the agent to search when something is missing."""
+    import json as _json
+    path = os.path.join(os.path.dirname(DAYS), "sessions.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            rows = _json.load(f)
+    except Exception:
+        return ""
+    tail = rows[-5:]
+    if not tail:
+        return ""
+    lines = ["## Earlier sessions", "",
+             "If the user says something is missing, this conversation may have been split. "
+             "Use session_search on these ids before saying you do not know:"]
+    for r in reversed(tail):
+        lines.append("- %s (%s)" % (r.get("chat_id"), r.get("at")))
+    return "\n".join(lines)
+
+
 def platform_hint() -> str:
     """philosophy.md, criteria.md and the routine enter every vipa turn."""
-    parts = [_read("philosophy.md"), _read("criteria.md"), _routine()]
+    parts = [_read("philosophy.md"), _read("criteria.md"), _routine(), _recent_sessions()]
     text = "\n\n".join(p for p in parts if p)
     return text or ("vipa is a tiny flip phone (KYF39): 480x854, no touchscreen, four keys. "
                     "Answer in one short line. No emoji. Only what is actually owed today.")

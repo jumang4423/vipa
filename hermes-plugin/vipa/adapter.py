@@ -305,6 +305,7 @@ class VipaAdapter(BasePlatformAdapter):
         self._worker = None
         self._last_activity = None
         self._fresh = True
+        self._session_day = None
         self._server = None
         self._thread = None
 
@@ -328,8 +329,10 @@ class VipaAdapter(BasePlatformAdapter):
         self._thread.start()
         self._worker = asyncio.ensure_future(self._drain())
         self._mark_connected()
+        self._session_day = self._cycle_day()
         self._log_sessions()
-        log.info("vipa: listening on %s (session %s)", self.listen, self.chat_id)
+        log.info("vipa: listening on %s (session %s, day %s)",
+                 self.listen, self.chat_id, self._session_day)
         return True
 
     async def disconnect(self) -> None:
@@ -338,11 +341,37 @@ class VipaAdapter(BasePlatformAdapter):
             self._worker = None
         self._last_activity = None
         self._fresh = True
+        self._session_day = None
         if self._server is not None:
             self._server.shutdown()
             self._server.server_close()
             self._server = None
         self._mark_disconnected()
+
+    def _cycle_day(self):
+        """Which 'day' the session belongs to, given VIPA_RESET_HOUR (default midnight)."""
+        import datetime
+        raw = extra_or_secret(getattr(self.config, "extra", {}) or {}, "reset_hour",
+                              "VIPA_RESET_HOUR")
+        try:
+            hour = int(raw) if raw not in (None, "") else 0
+        except ValueError:
+            hour = 0
+        return (datetime.datetime.now() - datetime.timedelta(hours=hour)).date()
+
+    def _rotate_if_new_day(self):
+        """A new day starts a new session. Checked on inbound, so sleep cannot break it."""
+        if (extra_or_secret(getattr(self.config, "extra", {}) or {}, "daily_reset",
+                            "VIPA_DAILY_RESET") or "1") in ("0", "false", "no"):
+            return
+        today = self._cycle_day()
+        if self._session_day is None:
+            self._session_day = today
+            return
+        if today != self._session_day:
+            self._session_day = today
+            log.info("vipa: new day -> new session")
+            self._rotate_session()
 
     def _log_sessions(self):
         try:
@@ -437,6 +466,10 @@ class VipaAdapter(BasePlatformAdapter):
 
     def _deliver(self, text, user="vipa"):
         """Queue one message. The HTTP response never waits for the agent."""
+        try:
+            self._rotate_if_new_day()
+        except Exception as e:
+            log.warning("vipa: day check failed: %s", e)
         self._last_activity = time.time()
         if getattr(self, "_fresh", False):
             self._fresh = False

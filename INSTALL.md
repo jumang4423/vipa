@@ -165,9 +165,11 @@ VIPA_LISTEN=0.0.0.0:8099
 VIPA_ALLOW_ALL_USERS=1                       # no pairing prompt
 GROQ_API_KEY=gsk_...                         # required for input
 VIPA_NGROK_URL=your-name.ngrok-free.dev      # stable ngrok URL
-# No timer rotates a session. A new one starts only when the rules or the adapter change,
-# or when you POST /api/rotate. The previous session id is written to ~/.hermes/vipa/sessions.json
+# A new day starts a new session (checked on the next message, so sleep cannot break it).
+# Nothing rotates on silence. The previous session id is written to ~/.hermes/vipa/sessions.json
 # and handed to the first message of the new session, so the agent can session_search it.
+VIPA_RESET_HOUR=0            # the hour the "day" turns over
+VIPA_DAILY_RESET=1           # 0 disables it entirely
 ```
 
 ## Outside access with ngrok

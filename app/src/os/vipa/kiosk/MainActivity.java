@@ -272,11 +272,11 @@ public class MainActivity extends Activity {
 
     /** How long one request may be held: ngrok cuts a request at 5 minutes. */
     static int holdSeconds() {
-        return onLan ? 600 : 240;
+        return onLan ? 120 : 240;
     }
 
     static int pageHoldSeconds() {
-        return onLan ? 300 : 60;
+        return onLan ? 120 : 60;
     }
 
     // ------------------------------------------------------------ which entrance

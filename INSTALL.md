@@ -360,13 +360,24 @@ from `/api/health`'s `lan` field — and holds there for 600 s instead. It goes 
 by itself, checking once per hold.
 
 ```
-tunnel dead  -> 5.9 s to notice, then http://192.168.2.101:8099 (lan fallback), 600 s holds
-tunnel back  -> next hold ends, chooseBase() sees it answering, back to ngrok, 240 s holds
+tunnel dead   -> 6-13 s to notice (the held request errors), then the local address,
+                 120 s holds
+tunnel back   -> the next held request ends (<=2 min), chooseBase() sees the tunnel
+                 answering, back to ngrok with 240 s holds
 ```
 
-Verified both ways on the handset (ngrok suspended with `kill -STOP`, then resumed): a push
-arrived in 2 s while on the fallback, and the app returned to the tunnel on its own. The fallback
-cannot help if this machine is asleep — then nothing answers.
+Verified both ways on the handset with ngrok suspended (`kill -STOP`, which keeps the edge up
+but the agent frozen — the harsher case):
+
+```
+16:30:33  base -> http://192.168.2.101:8099 (lan fallback)   hold 120 s
+16:30:43  tunnel resumed on the Mac
+16:32:39  hold done
+16:32:40  base -> https://stipulate-clad-online.ngrok-free.dev (tunnel)   hold 240 s
+```
+
+A push arrived in 2 s while it was on the fallback. Nothing was touched on the phone. The
+fallback cannot help if this machine is asleep — then nothing answers.
 
 ### What it costs
 

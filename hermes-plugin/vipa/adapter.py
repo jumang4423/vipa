@@ -501,7 +501,9 @@ class VipaAdapter(BasePlatformAdapter):
 
     # Notices the gateway emits about itself. They are not for the phone.
     NOISE = ("Self-improvement review", "Gateway online", "Memory updated",
-             "Redirected current run", "\u21aa", "no assistant output for this turn")
+             "Redirected current run", "\u21aa", "no assistant output for this turn",
+             "\u23f3 Working", "\u23f3 Still working", "iteration ",
+             "tool_progress")
 
     @classmethod
     def is_noise(cls, text):

@@ -165,7 +165,7 @@ VIPA_LISTEN=0.0.0.0:8099
 VIPA_ALLOW_ALL_USERS=1                       # no pairing prompt
 GROQ_API_KEY=gsk_...                         # required for input
 VIPA_NGROK_URL=your-name.ngrok-free.dev      # stable ngrok URL
-VIPA_IDLE_RESET_MIN=60                       # an hour of silence starts a new session
+VIPA_IDLE_RESET_MIN=0                        # 0 = never rotate on silence (notes survive a trip)
 VIPA_DAILY_RESET=1                           # rotate at VIPA_RESET_HOUR (default 0:00)
 VIPA_RESET_HOUR=0
 ```

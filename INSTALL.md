@@ -358,21 +358,3 @@ adb shell rm -f /sdcard/vipa.url
 Also delete the `platforms.vipa` block from `config.yaml` and the `VIPA_*` / `GROQ_API_KEY`
 lines you added to `.env`.
 
-## Silence on the phone
-
-Hermes sends tool progress and "still working" heartbeats to messaging platforms by default.
-On a 480px screen they are noise, and they can arrive instead of the answer. Turn them off for
-this platform at the source:
-
-```yaml
-display:
-  platforms:
-    vipa:
-      tool_progress: off
-      long_running_notifications: false
-      busy_ack_detail: false
-      interim_assistant_messages: false
-```
-
-The adapter also drops anything that still looks like a notice (⏳ Working, iteration N/M,
-"Self-improvement review", "[interrupt: …]") — defence in depth, not the fix.

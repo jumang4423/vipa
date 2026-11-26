@@ -261,8 +261,32 @@ PY=/Users/you/.hermes/installs/<id>/environments/<id>/venv/bin/python
 uv pip install --python "$PY" ddgs
 ```
 
-Restart the gateway afterwards. Verified: `web_search` answers, and the `browser` toolset opens
-pages (including JS-rendered ones) with a real Chromium on the host.
+Restart the gateway afterwards. Verified: `web_search` answers from the phone.
+
+### Browser work goes through the user's own Brave
+
+Do not let the agent drive its own Chromium: that profile is empty, so every site asks it to log
+in again. Delete the bundled build (367 MB, regenerable with `hermes pm install chromium`) and
+route browser work through the real browser instead:
+
+```bash
+rm -rf ~/.hermes/tools/chromium-1248
+```
+
+```yaml
+agent:
+  disabled_toolsets: [browser]
+mcp_servers:
+  playwright-brave:
+    command: node
+    args: [".../@playwright/mcp/cli.js", "--extension"]
+    env:
+      PLAYWRIGHT_MCP_EXTENSION_TOKEN: "<from the Playwright extension popup>"
+      PLAYWRIGHT_MCP_EXECUTABLE_PATH: "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
+```
+
+Verified with the bundled Chromium deleted and `browser` disabled: the agent still opened a page
+and read its title, through Brave, using the user's existing logins.
 
 ## Known limits of the phone
 

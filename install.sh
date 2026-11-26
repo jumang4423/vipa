@@ -142,6 +142,51 @@ else:
     print("  config: platform_toolsets appended")
 PY3
 
+# 3d. quiet on the phone. Hermes pushes tool progress and "⏳ Working" heartbeats to every
+# messaging platform by default; on a 480px screen they arrive instead of the answer.
+python3 - "$CFG" <<'PY4'
+import re, sys
+
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+wanted = """      tool_progress: off
+      long_running_notifications: false
+      busy_ack_detail: false
+      interim_assistant_messages: false
+"""
+if re.search(r'^      long_running_notifications:', s, re.M):
+    print("  config: display.platforms.vipa already quiet")
+elif re.search(r'^  platforms:[ \t]*$', s, re.M):
+    s = re.sub(r'^  platforms:[ \t]*$', "  platforms:\n    vipa:\n" + wanted.rstrip("\n"),
+               s, count=1, flags=re.M)
+    open(p, "w", encoding="utf-8").write(s)
+    print("  config: display.platforms.vipa added")
+elif re.search(r'^display:[ \t]*$', s, re.M):
+    s = re.sub(r'^display:[ \t]*$',
+               "display:\n  platforms:\n    vipa:\n" + wanted.rstrip("\n"), s, count=1, flags=re.M)
+    open(p, "w", encoding="utf-8").write(s)
+    print("  config: display block added")
+else:
+    if not s.endswith("\n"):
+        s += "\n"
+    s += "\ndisplay:\n  platforms:\n    vipa:\n" + wanted
+    open(p, "w", encoding="utf-8").write(s)
+    print("  config: display appended")
+PY4
+
+# 3e. web_search needs one backend; DuckDuckGo's ddgs needs no key.
+PYV="$(ls -d "$H"/installs/*/environments/*/venv/bin/python 2>/dev/null | tail -1 || true)"
+if [ -n "$PYV" ] && command -v uv >/dev/null 2>&1; then
+  if "$PYV" -c "import ddgs" >/dev/null 2>&1; then
+    say "web search: ddgs already present"
+  else
+    uv pip install --python "$PYV" ddgs >/dev/null 2>&1 \
+      && say "web search: ddgs installed" || say "web search: ddgs install failed (uv pip install ddgs)"
+  fi
+else
+  say "web search: skipped (uv or the gateway venv not found)"
+fi
+
 # ---------------------------------------------------------------- 4. gateway
 # Restarting is NOT done here on purpose: Hermes refuses to run, from inside a gateway
 # session, any command that could stop the gateway — and that judgement covers this script

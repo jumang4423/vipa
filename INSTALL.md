@@ -169,7 +169,7 @@ VIPA_NGROK_URL=your-name.ngrok-free.dev      # stable ngrok URL
 # Nothing rotates on silence. The previous session id is written to ~/.hermes/vipa/sessions.json
 # and handed to the first message of the new session, so the agent can session_search it.
 VIPA_RESET_HOUR=0            # the hour the "day" turns over
-VIPA_DAILY_RESET=1           # 0 disables it entirely
+VIPA_DAILY_RESET=1           # default 1; 0 disables it entirely
 ```
 
 ## Outside access with ngrok

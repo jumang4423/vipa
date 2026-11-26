@@ -5,6 +5,15 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.text.InputType;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.WebChromeClient;
@@ -34,9 +43,12 @@ public class MainActivity extends Activity {
     private static final int MAX_RETRY = 6;
 
     private WebView web;
+    private FrameLayout root;
+    private LinearLayout textOverlay;
+    private EditText textInput;
     private int retry = 0;
     private final Handler handler = new Handler();
-    private final String[] skLabels = {"Voice", "Switch", "", ""};
+    private final String[] skLabels = {"Voice", "Switch", "Text", ""};
 
     public static volatile boolean visible = false;
 
@@ -116,7 +128,11 @@ public class MainActivity extends Activity {
             }
         });
 
-        setContentView(web);
+        root = new FrameLayout(this);
+        root.addView(web, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        buildTextOverlay();
+        setContentView(root);
         hidePointerIcon();
         web.loadUrl(home);
         handler.postDelayed(new Runnable() {
@@ -316,6 +332,11 @@ public class MainActivity extends Activity {
             if (c == KeyEvent.KEYCODE_F1) {          // top-left soft key
                 toggleVoice(); return true;
             }
+            if (c == KeyEvent.KEYCODE_F3) {          // bottom-left: the platform text field
+                if (textOverlay.getVisibility() == View.VISIBLE) hideTextEntry();
+                else showTextEntry();
+                return true;
+            }
             if (c == KeyEvent.KEYCODE_F4) {          // same physical press sends F3 then F4
                 return true;
             }
@@ -432,6 +453,108 @@ public class MainActivity extends Activity {
         } catch (Throwable t) {
             return "\"\"";
         }
+    }
+
+    // ------------------------------------------------------------ text field (platform IME)
+
+    private void buildTextOverlay() {
+        textOverlay = new LinearLayout(this);
+        textOverlay.setOrientation(LinearLayout.VERTICAL);
+        textOverlay.setBackgroundColor(0xFF000000);
+        textOverlay.setPadding(dip(12), dip(12), dip(12), dip(12));
+        textOverlay.setVisibility(View.GONE);
+
+        textInput = new EditText(this);
+        textInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        textInput.setImeOptions(EditorInfo.IME_ACTION_SEND
+                | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+        textInput.setTextColor(0xFFFFFFFF);
+        textInput.setHintTextColor(0xFF6F6F6F);
+        textInput.setHint("入力");
+        textInput.setTextSize(18);
+        textInput.setBackgroundColor(0xFF101010);
+        textInput.setPadding(dip(10), dip(10), dip(10), dip(10));
+        textInput.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+            public boolean onEditorAction(TextView v, int actionId, KeyEvent e) {
+                if (actionId == EditorInfo.IME_ACTION_SEND || actionId == EditorInfo.IME_ACTION_DONE) {
+                    sendTextEntry();
+                    return true;
+                }
+                return false;
+            }
+        });
+        textOverlay.addView(textInput, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView hint = new TextView(this);
+        hint.setText("Done = 送信 / BACK = 閉じる");
+        hint.setTextColor(0xFF6F6F6F);
+        hint.setTextSize(11);
+        hint.setPadding(0, dip(10), 0, 0);
+        textOverlay.addView(hint);
+
+        root.addView(textOverlay, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    }
+
+    private void showTextEntry() {
+        textInput.setText("");
+        textOverlay.setVisibility(View.VISIBLE);
+        textInput.requestFocus();
+        try {
+            InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            imm.showSoftInput(textInput, InputMethodManager.SHOW_IMPLICIT);
+        } catch (Throwable t) {
+            Log.i(TAG, "ime n/a " + t);
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (textOverlay != null && textOverlay.getVisibility() == View.VISIBLE) {
+            hideTextEntry();
+            return;
+        }
+        super.onBackPressed();
+    }
+
+    private void hideTextEntry() {
+        try {
+            InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            imm.hideSoftInputFromWindow(textInput.getWindowToken(), 0);
+        } catch (Throwable ignored) {}
+        textInput.setText("");
+        textOverlay.setVisibility(View.GONE);
+        web.requestFocus();
+    }
+
+    private void sendTextEntry() {
+        final String text = textInput.getText().toString().trim();
+        if (text.length() == 0) { hideTextEntry(); return; }
+        hideTextEntry();
+        new Thread(new Runnable() {
+            public void run() {
+                HttpURLConnection c = null;
+                try {
+                    c = (HttpURLConnection) new URL(SERVER + "/api/in").openConnection();
+                    Tls.relax(c);
+                    c.setConnectTimeout(10000);
+                    c.setReadTimeout(20000);
+                    c.setRequestMethod("POST");
+                    c.setDoOutput(true);
+                    c.setRequestProperty("Content-Type", "application/json");
+                    byte[] body = ("{\"text\":" + org.json.JSONObject.quote(text) + "}").getBytes("UTF-8");
+                    c.setFixedLengthStreamingMode(body.length);
+                    OutputStream os = c.getOutputStream();
+                    os.write(body); os.flush(); os.close();
+                    Log.i(TAG, "text sent http=" + c.getResponseCode());
+                } catch (Throwable t) {
+                    Log.i(TAG, "text send FAIL " + t);
+                } finally {
+                    if (c != null) c.disconnect();
+                }
+            }
+        }).start();
     }
 
     private File recFile() {

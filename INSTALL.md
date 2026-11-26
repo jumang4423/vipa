@@ -242,6 +242,9 @@ adb shell am start -n os.vipa.kiosk/.MainActivity
 - 480×854 at 240dpi, system font scale 1.45 — the page sets `textZoom(100)`.
 - Soft keys: A1 Voice (F1), A2 Switch (F2), A3 Text (F3; the press also emits F4, which is
   swallowed), A4 unused.
+- Text uses a native `EditText`, so the handset's own IME (iWnn) appears with kana, kanji
+  conversion and prediction. `Done` sends (`IME_ACTION_SEND`), `BACK` closes. Nothing custom:
+  the IME owns the keys while it is open, which is why the app does not intercept them.
 
 ## Rebuilding the app
 

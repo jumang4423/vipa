@@ -363,20 +363,6 @@ function poll() {
   x.send();
 }
 
-/* Java switches between the tunnel and the machine on the same Wi-Fi. */
-function setApi(u) {
-  if (!u || u === API) return;
-  API = u;
-  gen++;
-  busy = false;
-  if (xhr) { try { xhr.abort(); } catch (e) {} xhr = null; }
-  poll();
-}
-
-function setHold(seconds) {
-  if (seconds > 0) POLL_HOLD = seconds;
-}
-
 /* Called from Java when the screen comes back: drop whatever was in flight and ask again. */
 function pollForce() {
   gen++;

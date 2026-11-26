@@ -70,7 +70,6 @@ final class Waiter {
             } catch (Throwable t) {
                 backoff = backoff == 0 ? 5000 : Math.min(backoff * 2, 300000);
                 Log.i(TAG, "wait FAIL " + t + " retry in " + backoff + "ms");
-                MainActivity.refreshBase();     // the local address may be gone; try the tunnel
                 sleep(backoff);
             }
         }

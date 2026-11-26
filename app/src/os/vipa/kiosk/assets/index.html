@@ -176,7 +176,7 @@ var API = (function () {
   return m ? decodeURIComponent(m[1]) : 'http://127.0.0.1:8099';
 })();
 
-var POLL_MS = 5000;
+var POLL_MS = 2000;   // the phone asks twice as often: an answer lands ~1.5s sooner on average
 
 var thread = document.getElementById('thread');
 var typing = document.getElementById('typing');

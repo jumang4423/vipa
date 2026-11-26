@@ -361,6 +361,12 @@ A network change does not stall it: a broken socket throws, the waiter backs off
 and reconnects. The one case it cannot see is a silently black-holed connection, which delays a
 message by at most one hold (4 minutes).
 
+Measured on the handset with the screen off: **2 requests in 9 minutes**, and no traffic in
+between. Do not raise the hold past ~5 minutes on ngrok's free tier: a request held with no
+response for 300 s is killed with `503 ERR_NGROK_3004` (measured), so 240 s is the practical
+maximum there. On your own server, holds of 30–60 minutes would cut this to a few dozen
+wake-ups a day.
+
 ## Known limits of the phone
 
 - Android 5.1, no GMS, no Play Services. Polling only.

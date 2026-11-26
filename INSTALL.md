@@ -349,15 +349,24 @@ exemptions.
 3. **The socket must be reused.** `Box.get()` does not call `disconnect()` on success, so the
    TLS connection is pooled and a wake-up costs one small packet, not a handshake.
 
-### One entrance, always
+### One entrance, with a local fallback
 
-The app talks to exactly one address: the URL in `/sdcard/vipa.url`, which `install.sh` writes
-(the ngrok URL). It deliberately does not switch to a local address, so putting a SIM in changes
-nothing — home and outside use the same code path and the same 240 s hold.
+The app talks to the URL in `/sdcard/vipa.url`, which `install.sh` writes (the ngrok URL). That
+is the only normal entrance, so putting a SIM in changes nothing: home and outside take the same
+path, with the same 240 s hold.
 
-`/api/health` does report `lan` (this machine's own address). That is information only; nothing
-in the app uses it, and the previous "prefer the local address at home" mode was removed on
-purpose: one entrance is worth more than 48 versus 360 requests a day.
+If the tunnel stops answering, the app falls back to this machine's local address — it learns it
+from `/api/health`'s `lan` field — and holds there for 600 s instead. It goes back to the tunnel
+by itself, checking once per hold.
+
+```
+tunnel dead  -> 5.9 s to notice, then http://192.168.2.101:8099 (lan fallback), 600 s holds
+tunnel back  -> next hold ends, chooseBase() sees it answering, back to ngrok, 240 s holds
+```
+
+Verified both ways on the handset (ngrok suspended with `kill -STOP`, then resumed): a push
+arrived in 2 s while on the fallback, and the app returned to the tunnel on its own. The fallback
+cannot help if this machine is asleep — then nothing answers.
 
 ### What it costs
 

@@ -40,10 +40,14 @@ import java.net.URL;
  */
 public class MainActivity extends Activity {
 
-    // One entrance only: /sdcard/vipa.url (the ngrok URL), so the phone behaves the same at
-    // home and outside, and slipping a SIM in needs no changes here.
+    // The tunnel (/sdcard/vipa.url, the ngrok URL) is the only normal entrance: it works at
+    // home and outside, so a SIM changes nothing. The local address is a *fallback* for when
+    // ngrok is down, and the app returns to the tunnel as soon as it answers again.
     public static volatile String REMOTE = "http://192.168.2.101:8099";
     public static volatile String SERVER = "http://192.168.2.101:8099";
+    public static volatile boolean onLan = false;
+    private static MainActivity inst = null;
+    private static android.content.Context appCtx = null;
     private String home = SERVER + "/";
     private static final String TAG = "VIPA";
     private static final int MAX_RETRY = 6;
@@ -66,6 +70,8 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
 
+        inst = this;
+        appCtx = getApplicationContext();
         REMOTE = resolveServer();
         SERVER = REMOTE;
         home = assetHome();
@@ -240,6 +246,7 @@ public class MainActivity extends Activity {
         super.onResume();
         visible = true;
         refreshCharging();
+        chooseBaseAsync();
         if (web != null && pageReady) handler.post(new Runnable() {
             public void run() { web.loadUrl("javascript:try{pollForce()}catch(e){}"); }
         });
@@ -252,6 +259,12 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onDestroy() {
+        if (inst == this) inst = null;
+        super.onDestroy();
+    }
+
+    @Override
     protected void onPause() {
         visible = false;
         super.onPause();
@@ -259,11 +272,78 @@ public class MainActivity extends Activity {
 
     /** How long one request may be held: ngrok cuts a request at 5 minutes. */
     static int holdSeconds() {
-        return 240;
+        return onLan ? 600 : 240;
     }
 
     static int pageHoldSeconds() {
-        return 60;
+        return onLan ? 300 : 60;
+    }
+
+    // ------------------------------------------------------------ which entrance
+
+    /** Tunnel first; the local address only while the tunnel is down. */
+    static void chooseBaseAsync() {
+        new Thread(new Runnable() {
+            public void run() {
+                try {
+                    chooseBase();
+                } catch (Throwable t) {
+                    Log.i(TAG, "chooseBase FAIL " + t);
+                }
+            }
+        }, "vipa-base").start();
+    }
+
+    static synchronized void chooseBase() {
+        if (appCtx == null) return;
+
+        JSONObject h = health(REMOTE, 8000);
+        if (h != null) {
+            setBase(REMOTE, false);
+            JSONArray arr = h.optJSONArray("lan");
+            if (arr != null && arr.length() > 0) {
+                appCtx.getSharedPreferences("vipa", 0).edit()
+                        .putString("lan", arr.optString(0, "")).apply();
+            }
+            return;
+        }
+
+        String lan = appCtx.getSharedPreferences("vipa", 0).getString("lan", "");
+        if (lan != null && lan.length() > 0 && health(lan, 1500) != null) {
+            setBase(lan, true);
+            return;
+        }
+        setBase(REMOTE, false);
+    }
+
+    private static JSONObject health(String base, int readMs) {
+        try {
+            JSONObject o = Box.getAt(base, "/api/health", readMs, readMs);
+            return o != null && o.optBoolean("ok", false) ? o : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static void setBase(String url, boolean lan) {
+        if (url.equals(SERVER) && lan == onLan) return;
+        SERVER = url;
+        onLan = lan;
+        Log.i(TAG, "base -> " + url + (lan ? " (lan fallback)" : " (tunnel)"));
+        final MainActivity a = inst;
+        if (a == null) return;
+        a.handler.post(new Runnable() {
+            public void run() {
+                if (a.web == null) return;
+                a.home = a.assetHome();
+                a.web.loadUrl("javascript:try{setApi(" + jsonString(SERVER) + ");setHold("
+                        + pageHoldSeconds() + ")}catch(e){}");
+            }
+        });
+    }
+
+    private static String jsonString(String v) {
+        return "\"" + v.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
     // ------------------------------------------------------------ softkeys

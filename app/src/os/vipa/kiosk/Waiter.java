@@ -51,6 +51,11 @@ final class Waiter {
             // This thread holds one request whether or not the page is open on top of it: it is
             // what posts the notification, and the page's own request can die with the WebView.
             // Two concurrent holds cost one extra request per hold length — nothing.
+            // While running on the fallback, look for the tunnel once per hold so the phone
+            // goes back to the normal entrance by itself.
+            if (MainActivity.onLan) {
+                MainActivity.chooseBase();
+            }
             try {
                 SharedPreferences sp = app.getSharedPreferences("vipa", 0);
                 int last = sp.getInt("lastSeq", 0);
@@ -70,6 +75,7 @@ final class Waiter {
             } catch (Throwable t) {
                 backoff = backoff == 0 ? 5000 : Math.min(backoff * 2, 300000);
                 Log.i(TAG, "wait FAIL " + t + " retry in " + backoff + "ms");
+                MainActivity.chooseBase();      // tunnel down? fall back; tunnel back? return
                 sleep(backoff);
             }
         }

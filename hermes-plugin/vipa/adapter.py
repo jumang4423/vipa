@@ -294,6 +294,7 @@ class VipaAdapter(BasePlatformAdapter):
         self._loop = None
         self._worker = None
         self._session_day = None
+        self._last_activity = None
         self._server = None
         self._thread = None
 
@@ -318,7 +319,8 @@ class VipaAdapter(BasePlatformAdapter):
         self._worker = asyncio.ensure_future(self._drain())
         self._session_day = self._cycle_day()
         self._mark_connected()
-        log.info("vipa: listening on %s", self.listen)
+        log.info("vipa: listening on %s (idle reset %s min, reset hour %s)",
+                 self.listen, self._idle_minutes(), self._reset_hour())
         return True
 
     async def disconnect(self) -> None:
@@ -326,6 +328,7 @@ class VipaAdapter(BasePlatformAdapter):
             self._worker.cancel()
             self._worker = None
         self._session_day = None
+        self._last_activity = None
         if self._server is not None:
             self._server.shutdown()
             self._server.server_close()
@@ -352,8 +355,27 @@ class VipaAdapter(BasePlatformAdapter):
         now = datetime.datetime.now()
         return (now - datetime.timedelta(hours=hour)).date()
 
+    def _reset_hour(self):
+        raw = extra_or_secret(getattr(self.config, "extra", {}) or {}, "reset_hour",
+                              "VIPA_RESET_HOUR")
+        try:
+            return int(raw) if raw not in (None, "") else 0
+        except ValueError:
+            return 0
+
+    def _idle_minutes(self):
+        raw = extra_or_secret(getattr(self.config, "extra", {}) or {}, "idle_reset_min",
+                              "VIPA_IDLE_RESET_MIN")
+        try:
+            return float(raw) if raw not in (None, "") else 60.0
+        except ValueError:
+            return 60.0
+
     def _rotate_if_new_day(self):
-        """Called on every inbound message: cheap, and survives sleep and restarts."""
+        """Called on every inbound message: a new day, or a long silence, starts a new session.
+
+        Cheap, and it survives sleep and restarts — unlike a timer that has to stay awake.
+        """
         if (extra_or_secret(getattr(self.config, "extra", {}) or {}, "daily_reset",
                             "VIPA_DAILY_RESET") or "1") in ("0", "false", "no"):
             return
@@ -364,6 +386,13 @@ class VipaAdapter(BasePlatformAdapter):
         if today != self._session_day:
             self._session_day = today
             self._rotate_session()
+            return
+        idle = self._idle_minutes()
+        if idle > 0 and self._last_activity is not None:
+            gap = (time.time() - self._last_activity) / 60.0
+            if gap >= idle:
+                log.info("vipa: idle %.0f min -> new session", gap)
+                self._rotate_session()
 
     async def _drain(self):
         """An agent turn takes minutes. Acknowledge fast, run turns in order here."""
@@ -423,6 +452,7 @@ class VipaAdapter(BasePlatformAdapter):
             self._rotate_if_new_day()
         except Exception as e:
             log.warning("vipa: daily rotation check failed: %s", e)
+        self._last_activity = time.time()
         self._push("user", text)
         if self.inject_rules and not text.startswith("/"):
             # Slash commands (/new, /reset, ...) must reach the gateway untouched.
@@ -454,6 +484,7 @@ class VipaAdapter(BasePlatformAdapter):
         return t.startswith("[interrupt") or any(n in t for n in cls.NOISE)
 
     async def send(self, chat_id, content, reply_to=None, metadata=None):
+        self._last_activity = time.time()
         text = condense(content)
         if not text:
             return SendResult(success=False)

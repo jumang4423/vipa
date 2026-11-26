@@ -304,6 +304,7 @@ class VipaAdapter(BasePlatformAdapter):
         self._loop = None
         self._worker = None
         self._last_activity = None
+        self._fresh = True
         self._server = None
         self._thread = None
 
@@ -336,6 +337,7 @@ class VipaAdapter(BasePlatformAdapter):
             self._worker.cancel()
             self._worker = None
         self._last_activity = None
+        self._fresh = True
         if self._server is not None:
             self._server.shutdown()
             self._server.server_close()
@@ -373,7 +375,9 @@ class VipaAdapter(BasePlatformAdapter):
         The previous id is kept on disk and named in the prompt, so nothing is lost for good.
         """
         base = self.chat_id.split("-")[0] or "vipa"
+        self._previous = self.chat_id
         self._remember_session(self.chat_id)
+        self._fresh = True
         self.chat_id = "%s-%d" % (base, int(time.time()))
         if clear:
             self._reset()
@@ -434,6 +438,13 @@ class VipaAdapter(BasePlatformAdapter):
     def _deliver(self, text, user="vipa"):
         """Queue one message. The HTTP response never waits for the agent."""
         self._last_activity = time.time()
+        if getattr(self, "_fresh", False):
+            self._fresh = False
+            prev = getattr(self, "_previous", "")
+            if prev:
+                text = ("[vipa] これは新しいセッション。前のセッションIDは %s。"
+                        "文脈が足りないと感じたら session_search でそのIDを調べる。\n\n%s"
+                        % (prev, text))
         self._push("user", text)
         if self.inject_rules and not text.startswith("/"):
             # Slash commands (/new, /reset, ...) must reach the gateway untouched.
@@ -748,7 +759,7 @@ def _recent_sessions():
 
 def platform_hint() -> str:
     """philosophy.md, criteria.md and the routine enter every vipa turn."""
-    parts = [_read("philosophy.md"), _read("criteria.md"), _routine(), _recent_sessions()]
+    parts = [_read("philosophy.md"), _read("criteria.md"), _routine()]
     text = "\n\n".join(p for p in parts if p)
     return text or ("vipa is a tiny flip phone (KYF39): 480x854, no touchscreen, four keys. "
                     "Answer in one short line. No emoji. Only what is actually owed today.")

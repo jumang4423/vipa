@@ -64,6 +64,10 @@ final class Waiter {
                 Log.i(TAG, "hold done " + (System.currentTimeMillis() - t0) + "ms");
                 lastOk = System.currentTimeMillis();
                 backoff = 0;
+                if (o == null) {                 // 502/503 from the tunnel: do not hammer it
+                    sleep(5000);
+                    continue;
+                }
                 Box.consume(app, o);
             } catch (Throwable t) {
                 backoff = backoff == 0 ? 5000 : Math.min(backoff * 2, 300000);

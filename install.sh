@@ -270,6 +270,10 @@ if [ -n "$SERIAL" ]; then
   "$ADB_BIN" -s "$SERIAL" install -r "$REPO/app/vipa.apk" >/dev/null && say "APK installed ($SERIAL)"
   printf '%s\n' "$URL" > /tmp/vipa.url
   "$ADB_BIN" -s "$SERIAL" push /tmp/vipa.url /sdcard/vipa.url >/dev/null && say "phone -> $URL"
+  # Without this the station sleeps with the screen, DNS stops resolving, and every message
+  # waits until something wakes the phone. It cannot be set from inside the app.
+  "$ADB_BIN" -s "$SERIAL" shell settings put global wifi_sleep_policy 2 >/dev/null 2>&1 \
+    && say "phone: Wi-Fi stays on while asleep"
   "$ADB_BIN" -s "$SERIAL" shell am start -n os.vipa.kiosk/.MainActivity >/dev/null 2>&1 || true
 else
   say "no phone on USB"

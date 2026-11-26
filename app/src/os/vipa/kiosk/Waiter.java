@@ -19,10 +19,20 @@ final class Waiter {
     private static final String TAG = "VIPA";
     private static final long STALE = 20 * 60 * 1000L;
 
+    private static final long RETRY_MIN = 5000L;
+    private static final long RETRY_MAX = 30000L;
+
     private static Thread thread;
     private static volatile long lastOk = 0L;
+    private static volatile boolean nudge = false;
 
     private Waiter() {
+    }
+
+    /** Wi-Fi came back (or went away): drop whatever is in flight and ask again at once. */
+    static void wake() {
+        nudge = true;
+        Box.abort();
     }
 
     /** True while the held request is healthy; the alarm fallback then stays silent. */

@@ -27,7 +27,19 @@ final class Box {
 
     private static final String TAG = "VIPA";
 
+    /** The request in flight, so a network change can cancel it instead of waiting it out. */
+    private static volatile HttpURLConnection current = null;
+
     private Box() {
+    }
+
+    static void abort() {
+        HttpURLConnection c = current;
+        if (c == null) return;
+        try {
+            c.disconnect();
+        } catch (Throwable ignored) {
+        }
     }
 
     /** GET path and parse it. Returns null on a non-200. Throws on network trouble. */
@@ -44,6 +56,7 @@ final class Box {
             c.setReadTimeout(readMs);
             c.setUseCaches(false);
             c.setRequestProperty("Connection", "keep-alive");
+            current = c;
             int code = c.getResponseCode();
             if (code != 200) {
                 c.disconnect();
@@ -55,6 +68,8 @@ final class Box {
         } catch (Exception e) {
             if (c != null) c.disconnect();
             throw e;
+        } finally {
+            current = null;
         }
     }
 

@@ -65,6 +65,7 @@ public class MainActivity extends Activity {
     public static volatile boolean visible = false;
 
     private MediaRecorderHolder rec = new MediaRecorderHolder();
+    private android.net.wifi.WifiManager.WifiLock wifiLock = null;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -163,6 +164,8 @@ public class MainActivity extends Activity {
         }, 700);
         refreshCharging();
         watchPower();
+        holdWifi();
+        watchNetwork();
         Waiter.ensure(this);
         schedulePoll();
     }
@@ -195,6 +198,41 @@ public class MainActivity extends Activity {
             charging = false;
         }
         Log.i(TAG, "charging=" + charging + " poll=" + pollIntervalMs() + "ms");
+    }
+
+    /** A WifiLock keeps the radio associated while the screen is off; without it the station
+     *  sleeps, DNS stops resolving and every retry fails until something wakes the phone. */
+    private void holdWifi() {
+        try {
+            android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager)
+                    getSystemService(WIFI_SERVICE);
+            wifiLock = wm.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL, "vipa:wait");
+            wifiLock.setReferenceCounted(false);
+            wifiLock.acquire();
+            Log.i(TAG, "wifi lock held");
+        } catch (Throwable t) {
+            Log.i(TAG, "wifi lock FAIL " + t);
+        }
+    }
+
+    /** When the network comes or goes, stop waiting for the old socket and ask again. */
+    private void watchNetwork() {
+        try {
+            android.content.BroadcastReceiver r = new android.content.BroadcastReceiver() {
+                @Override
+                public void onReceive(android.content.Context c, android.content.Intent i) {
+                    Log.i(TAG, "network changed: " + i.getExtras());
+                    Waiter.wake();
+                    if (web != null) handler.post(new Runnable() {
+                        public void run() { web.loadUrl("javascript:try{pollForce()}catch(e){}"); }
+                    });
+                }
+            };
+            registerReceiver(r,
+                    new android.content.IntentFilter(android.net.ConnectivityManager.CONNECTIVITY_ACTION));
+        } catch (Throwable t) {
+            Log.i(TAG, "watchNetwork FAIL " + t);
+        }
     }
 
     private void watchPower() {

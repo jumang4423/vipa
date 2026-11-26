@@ -397,6 +397,33 @@ response for 300 s is killed with `503 ERR_NGROK_3004` (measured), so 240 s is t
 maximum there. On your own server, holds of 30–60 minutes would cut this to a few dozen
 wake-ups a day.
 
+## When the phone goes quiet
+
+Symptom: a message sits in the box for minutes while the phone is closed, and appears the moment
+you open it. This is the Wi-Fi sleep policy, not the delivery code.
+
+Android turns the station off when the screen goes off (`wifi_sleep_policy` 0, the default) even
+while charging. The held request then dies silently: DNS stops resolving, every retry fails with
+`UnknownHostException`, and the phone looks offline until something wakes it.
+
+```
+11-26 20:19:18 wait FAIL UnknownHostException: ... "stipulate-clad-online.ngrok-free.dev"
+11-26 20:27:48 wait FAIL ... retry in 80000ms
+11-26 20:33:13 notified: 20:30 Shower        <- three minutes late
+```
+
+Three things fix it, and all three are needed:
+
+1. **Keep the station on while asleep** — `adb shell settings put global wifi_sleep_policy 2`
+   (`install.sh` does this). No app can change this setting itself.
+2. **A WifiLock** (`WIFI_MODE_FULL`) held by the app, so the association survives even if the
+   setting is reset.
+3. **React to the network** — a `CONNECTIVITY_ACTION` receiver cancels the request in flight
+   (`Box.abort()`) and re-asks at once, and the retry delay is capped at 30 s instead of 5 min.
+
+Measured after the fix, screen off for 8 minutes, then a push: holds cycled at exactly 240 s with
+no failure, and the message reached the phone in **0.6 s**.
+
 ## Known limits of the phone
 
 - Android 5.1, no GMS, no Play Services. Polling only.

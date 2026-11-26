@@ -8,6 +8,7 @@ No UI, no extra server, no third-party dependencies: stdlib only.
       POST /api/voice        audio -> Groq transcription -> agent
       POST /api/in           {"text": "..."} -> agent
       GET  /api/out?since=N  new messages
+      GET  /api/wait?since=N&timeout=S  the same, held open until something arrives
       GET  /api/schedule     the day, from schedule.json
       GET  /api/day          the body's record for one day
       POST /api/day          append weight|meal|mood|sleep|steps|health
@@ -40,6 +41,7 @@ log = logging.getLogger(__name__)
 GROQ_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 STT_MODEL = "whisper-large-v3-turbo"
 MAX_OUT = 200
+WAIT_MAX = 900          # longest the phone may hold one request open, in seconds
 MAX_BODY = 32 * 1024 * 1024
 # No truncation by default. Short answers are the agent's job (platform_hint says so);
 # the transport must never cut a sentence. Set VIPA_MAX_CHARS to a number to re-enable.
@@ -300,6 +302,7 @@ class VipaAdapter(BasePlatformAdapter):
         self._out = []
         self._seq = 0
         self._lock = threading.Lock()
+        self._wake = threading.Event()   # /api/wait blocks here instead of the phone polling
         self._q = None            # asyncio.Queue, created inside the loop
         self._loop = None
         self._worker = None
@@ -436,7 +439,8 @@ class VipaAdapter(BasePlatformAdapter):
             })
             if len(self._out) > MAX_OUT:
                 del self._out[:len(self._out) - MAX_OUT]
-            return self._seq
+        self._wake.set()
+        return self._seq
 
     def _since(self, since):
         with self._lock:
@@ -444,6 +448,29 @@ class VipaAdapter(BasePlatformAdapter):
                 since = 0
             rows = [m for m in self._out if m["seq"] > since]
             return {"messages": rows[-40:], "last": self._seq}
+
+    def _since_wait(self, since, timeout):
+        """Same answer as _since, but hold the request open until there is something.
+
+        The phone keeps one request in flight instead of asking every few seconds, so the
+        radio stays asleep until a message actually exists. On Android 5.1 (no Doze) an
+        incoming packet wakes the app, which is what makes this work at all.
+        """
+        deadline = time.time() + max(0, min(timeout, WAIT_MAX))
+        while True:
+            # The phone is ahead of us: the box was emptied (Clear) or the gateway restarted.
+            # Answer at once, or the phone would keep an old screen until its deadline.
+            with self._lock:
+                if since > self._seq:
+                    return {"messages": [], "last": self._seq}
+            data = self._since(since)
+            if data["messages"]:
+                return data
+            left = deadline - time.time()
+            if left <= 0:
+                return data
+            self._wake.wait(min(left, 30))
+            self._wake.clear()
 
     def _schedule(self):
         """The day as the phone shows it. Edit schedule.json; nothing else to touch."""
@@ -461,6 +488,7 @@ class VipaAdapter(BasePlatformAdapter):
         with self._lock:
             del self._out[:]
             self._seq = 0
+        self._wake.set()          # a held request must notice at once, not at its deadline
 
     # ---------------------------------------------------------------- inbound
 
@@ -568,6 +596,11 @@ class VipaAdapter(BasePlatformAdapter):
                 self.send_response(code)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
+                # The phone holds a request on a URL that repeats (?since=N does not change
+                # while it waits). Without this, the WebView answers from its own cache and
+                # the screen freezes on an old response.
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+                self.send_header("Pragma", "no-cache")
                 for k, v in CORS.items():
                     self.send_header(k, v)
                 self.end_headers()
@@ -612,6 +645,26 @@ class VipaAdapter(BasePlatformAdapter):
                     self._send(200, {"weights": weights(n)})
                 elif path == "/api/schedule":
                     self._send(200, adapter._schedule())
+                elif path == "/api/wait":
+                    since, wait = 0, 240
+                    for kv in query.split("&"):
+                        k, _, v = kv.partition("=")
+                        if k == "since":
+                            try:
+                                since = int(v)
+                            except ValueError:
+                                since = 0
+                        elif k == "timeout":
+                            try:
+                                wait = int(float(v))
+                            except ValueError:
+                                wait = 240
+                    t0 = time.time()
+                    log.debug("vipa: wait start since=%s timeout=%s", since, wait)
+                    data = adapter._since_wait(since, wait)
+                    log.debug("vipa: wait done %.1fs since=%s msgs=%d last=%s", time.time() - t0,
+                              since, len(data["messages"]), data["last"])
+                    self._send(200, data)
                 elif path == "/api/out":
                     since = 0
                     for kv in query.split("&"):

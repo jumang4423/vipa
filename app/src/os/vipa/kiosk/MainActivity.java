@@ -147,15 +147,17 @@ public class MainActivity extends Activity {
         }, 700);
         refreshCharging();
         watchPower();
+        Waiter.ensure(this);
         schedulePoll();
     }
 
-    // Foreground polling is driven from the page (2s, or 1s while charging).
-    // Background polling (notifications) follows the same rule, coarser when on battery.
+    // Messages normally arrive on the waiter's held request (see Waiter.java). This alarm is
+    // only a safety net, so it can be slow: it exists to restart the waiter if it ever dies,
+    // not to fetch. The page holds its own request while the screen is on.
     static volatile boolean charging = false;
 
     static long pollIntervalMs() {
-        return charging ? 1000L : 60000L;
+        return charging ? 60L * 1000L : 5L * 60L * 1000L;
     }
 
     private void refreshCharging() {
@@ -178,9 +180,8 @@ public class MainActivity extends Activity {
                 @Override
                 public void onReceive(android.content.Context c, android.content.Intent i) {
                     refreshCharging();
-                    final int ms = charging ? 1000 : 2000;
                     if (web != null) handler.post(new Runnable() {
-                        public void run() { web.loadUrl("javascript:setPollMs(" + ms + ")"); }
+                        public void run() { web.loadUrl("javascript:try{pollForce()}catch(e){}"); }
                     });
                 }
             };
@@ -195,19 +196,24 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void schedulePoll() {
+    /** Arm the safety-net alarm. Works from the activity and from PollReceiver alike. */
+    static void scheduleAlarm(android.content.Context ctx, long delayMs) {
         try {
             android.app.AlarmManager am =
-                    (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
-            android.content.Intent i = new android.content.Intent(this, PollReceiver.class);
+                    (android.app.AlarmManager) ctx.getSystemService(android.content.Context.ALARM_SERVICE);
+            android.content.Intent i = new android.content.Intent(ctx, PollReceiver.class);
             android.app.PendingIntent pi =
-                    android.app.PendingIntent.getBroadcast(this, 0, i, 0);
+                    android.app.PendingIntent.getBroadcast(ctx, 0, i, 0);
             am.setExact(android.app.AlarmManager.RTC_WAKEUP,
-                    System.currentTimeMillis() + pollIntervalMs(), pi);
-            Log.i(TAG, "next poll in " + pollIntervalMs() + "ms");
+                    System.currentTimeMillis() + delayMs, pi);
+            Log.i(TAG, "next poll in " + delayMs + "ms");
         } catch (Throwable t) {
             Log.i(TAG, "alarm FAIL " + t);
         }
+    }
+
+    private void schedulePoll() {
+        scheduleAlarm(this, pollIntervalMs());
     }
 
     @Override
@@ -216,10 +222,7 @@ public class MainActivity extends Activity {
         visible = true;
         refreshCharging();
         if (web != null && pageReady) handler.post(new Runnable() {
-            public void run() {
-                web.loadUrl("javascript:setPollMs(" + (charging ? 1000 : 2000) + ")");
-                web.loadUrl("javascript:poll()");
-            }
+            public void run() { web.loadUrl("javascript:try{pollForce()}catch(e){}"); }
         });
     }
 

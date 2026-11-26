@@ -26,12 +26,12 @@ flowchart LR
     W["the world<br/>feeds · mail · cron"] --> H["Hermes<br/>+ criteria.md"]
     H -- "owed today" --> P["KYF39<br/>one screen, four keys"]
     H -- "everything else" --> D["dropped<br/>stays at home"]
-    P -. "polls: 2s open, 60s closed" .-> H
+    P -. "holds one request open" .-> H
 ```
 
 One process, no second server: the plugin inside Hermes is the only door. The phone has no
-push channel (no GMS), so it asks: every 2 s while the screen is open, every 60 s while it is
-closed (1 s for either while charging).
+push channel (no GMS), so it keeps one request open and the server answers it the moment there
+is something: instant delivery, and 360 wake-ups a day instead of 17,280.
 
 ## Three screens
 

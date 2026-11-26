@@ -169,20 +169,20 @@
   </div>
 
 <script>
-/* Poll /api/out every 5s and draw only what is new. */
+/* Hold one request open and draw only what is new. The server answers the moment
+   something exists, so this is a push channel without a push service. */
 
 var API = (function () {
   var m = /[?&]u=([^&]+)/.exec(location.search);
   return m ? decodeURIComponent(m[1]) : 'http://127.0.0.1:8099';
 })();
 
-var POLL_MS = 2000;      // set by Java: 2s on battery, 1s while charging
-var POLL_HIDDEN = 60000; // nobody is looking: ask once a minute
+var POLL_HOLD = 60;      // seconds the server may keep the request open
 
 var thread = document.getElementById('thread');
 var typing = document.getElementById('typing');
 var typingText = document.getElementById('typing-text');
-var since = 0, busy = false;
+var since = 0, busy = false, xhr = null, gen = 0, tick = 0;
 
 /* ---------- markdown (just enough) ---------- */
 function esc(s) {
@@ -319,32 +319,56 @@ function hideRecording() {
 function poll() {
   if (busy) return;
   busy = true;
+  var mine = ++gen;
   var x = new XMLHttpRequest();
-  x.open('GET', API + '/api/out?since=' + since, true);
-  x.timeout = 15000;
+  xhr = x;
+  // the counter makes every request a fresh URL, so no cache can answer it
+  x.open('GET', API + '/api/wait?since=' + since + '&timeout=' + POLL_HOLD + '&n=' + (++tick), true);
+  x.timeout = (POLL_HOLD + 15) * 1000;
   x.onload = function () {
+    if (mine !== gen) return;
     busy = false;
     try {
       var d = JSON.parse(x.responseText);
       var ms = d.messages || [];
-      // the box was emptied or the gateway restarted: start over, cleanly
-      if (d.last !== undefined && d.last < since) { location.reload(); return; }
+      // the box was emptied or the gateway restarted: start over, cleanly, without
+      // a page reload (this handset's WebView sometimes keeps the old DOM on reload)
+      if (d.last !== undefined && d.last < since) {
+        thread.innerHTML = '';
+        since = 0;
+        hideTyping();
+        updateEmpty();
+      }
+      var fresh = 0;
       for (var i = 0; i < ms.length; i++) {
+        if (ms[i].seq <= since) continue;        // already drawn
         addBubble(ms[i].role, ms[i].text);
         since = ms[i].seq;
+        fresh++;
       }
-      var lastRole = ms.length ? ms[ms.length - 1].role : null;
+      var lastRole = fresh ? ms[ms.length - 1].role : null;
       if (lastRole === 'user') showTyping();
       else if (lastRole === 'assistant') hideTyping();
-      if (ms.length) { bottom(); }
+      if (fresh) { bottom(); }
       updateEmpty();
     } catch (e) {}
+    setTimeout(poll, 0);
   };
   x.onerror = x.ontimeout = function () {
+    if (mine !== gen) return;
     busy = false;
     showTyping('Offline');
+    setTimeout(poll, 3000);
   };
   x.send();
+}
+
+/* Called from Java when the screen comes back: drop whatever was in flight and ask again. */
+function pollForce() {
+  gen++;
+  busy = false;
+  if (xhr) { try { xhr.abort(); } catch (e) {} xhr = null; }
+  poll();
 }
 
 /* ---------- schedule screen (Switch key) ---------- */
@@ -550,20 +574,8 @@ function nextPage() {
   }
 }
 
-function setPollMs(ms) {
-  if (ms > 0) POLL_MS = ms;
-}
-
-function pollLoop() {
-  setTimeout(function () {
-    if (!document.hidden) poll();
-    pollLoop();
-  }, document.hidden ? POLL_HIDDEN : POLL_MS);
-}
-
 window.addEventListener('load', function () {
   poll();
-  pollLoop();
   setInterval(function () { if (schedOn) renderSchedule(); }, 30000);
 });
 </script>

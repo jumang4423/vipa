@@ -454,6 +454,10 @@ function applyView() {
   if (view === 0) bottom();
 }
 
+function goThread() {
+  if (view !== 0) { view = 0; applyView(); }
+}
+
 function toggleView() {
   view = (view + 1) % 3;
   applyView();

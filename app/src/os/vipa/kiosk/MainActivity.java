@@ -330,11 +330,16 @@ public class MainActivity extends Activity {
                 web.loadUrl("javascript:toggleView()"); return true;
             }
             if (c == KeyEvent.KEYCODE_F1) {          // top-left soft key
+                web.loadUrl("javascript:goThread()");
                 toggleVoice(); return true;
             }
             if (c == KeyEvent.KEYCODE_F3) {          // bottom-left: the platform text field
-                if (textOverlay.getVisibility() == View.VISIBLE) hideTextEntry();
-                else showTextEntry();
+                if (textOverlay.getVisibility() == View.VISIBLE) {
+                    hideTextEntry();
+                } else {
+                    web.loadUrl("javascript:goThread()");
+                    showTextEntry();
+                }
                 return true;
             }
             if (c == KeyEvent.KEYCODE_F4) {          // same physical press sends F3 then F4
@@ -470,7 +475,7 @@ public class MainActivity extends Activity {
                 | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
         textInput.setTextColor(0xFFFFFFFF);
         textInput.setHintTextColor(0xFF6F6F6F);
-        textInput.setHint("入力");
+        textInput.setHint("");
         textInput.setTextSize(18);
         textInput.setBackgroundColor(0xFF101010);
         textInput.setPadding(dip(10), dip(10), dip(10), dip(10));
@@ -486,21 +491,34 @@ public class MainActivity extends Activity {
         textOverlay.addView(textInput, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        TextView hint = new TextView(this);
-        hint.setText("Done = 送信 / BACK = 閉じる");
-        hint.setTextColor(0xFF6F6F6F);
-        hint.setTextSize(11);
-        hint.setPadding(0, dip(10), 0, 0);
-        textOverlay.addView(hint);
-
         root.addView(textOverlay, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    }
+
+    private final Runnable closeTextAfterIdle = new Runnable() {
+        public void run() {
+            if (textOverlay != null && textOverlay.getVisibility() == View.VISIBLE) {
+                Log.i(TAG, "text entry closed after idle");
+                hideTextEntry();
+            }
+        }
+    };
+
+    private void armIdleClose() {
+        handler.removeCallbacks(closeTextAfterIdle);
+        handler.postDelayed(closeTextAfterIdle, 10 * 60 * 1000L);   // 10 min
     }
 
     private void showTextEntry() {
         textInput.setText("");
         textOverlay.setVisibility(View.VISIBLE);
         textInput.requestFocus();
+        armIdleClose();
+        textInput.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence c, int a, int b, int d) {}
+            public void onTextChanged(CharSequence c, int a, int b, int d) { armIdleClose(); }
+            public void afterTextChanged(android.text.Editable e) {}
+        });
         try {
             InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
             imm.showSoftInput(textInput, InputMethodManager.SHOW_IMPLICIT);

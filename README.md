@@ -35,7 +35,7 @@ push channel (no GMS), so it asks for new messages every five seconds.
 ## Three screens
 
 Three keys: **Voice** (top left) records, **Switch** (top right) turns the page — thread →
-routine → health → thread — and **Text** (bottom left) opens the phone's own Japanese input
+routine → health → thread — **Clear** (bottom right) asks once, then starts a new session and empties the screen, and **Text** (bottom left) opens the phone's own Japanese input
 (iWnn), for when you cannot speak, like on a train. Type with the keypad, `Done` sends,
 `BACK` closes. No custom keyboard: it is the one the handset already ships.
 

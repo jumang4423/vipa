@@ -48,7 +48,7 @@ public class MainActivity extends Activity {
     private EditText textInput;
     private int retry = 0;
     private final Handler handler = new Handler();
-    private final String[] skLabels = {"Voice", "Switch", "Text", ""};
+    private final String[] skLabels = {"Voice", "Switch", "Text", "Clear"};
 
     public static volatile boolean visible = false;
 
@@ -348,6 +348,10 @@ public class MainActivity extends Activity {
             if (c == KeyEvent.KEYCODE_F4) {          // same physical press sends F3 then F4
                 return true;
             }
+            if (c >= KeyEvent.KEYCODE_F5 && c <= KeyEvent.KEYCODE_F12) {   // bottom-right: clear
+                confirmClear();
+                return true;
+            }
             if (c == KeyEvent.KEYCODE_F2
                     || c == KeyEvent.KEYCODE_BACK) {          // lower keys: jump to the end
                 web.loadUrl("javascript:bottom()"); return true;
@@ -461,6 +465,55 @@ public class MainActivity extends Activity {
         } catch (Throwable t) {
             return "\"\"";
         }
+    }
+
+    // ------------------------------------------------------------ clear (new session)
+
+    private void confirmClear() {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Clear")
+                .setMessage("Clear this session and start a new one?")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Clear", new android.content.DialogInterface.OnClickListener() {
+                    public void onClick(android.content.DialogInterface d, int w) {
+                        clearSession();
+                    }
+                })
+                .show();
+    }
+
+    private void clearSession() {
+        new Thread(new Runnable() {
+            public void run() {
+                HttpURLConnection c = null;
+                try {
+                    for (String path : new String[]{"/api/rotate", "/api/reset"}) {
+                        c = (HttpURLConnection) new URL(SERVER + path).openConnection();
+                        Tls.relax(c);
+                        c.setConnectTimeout(8000);
+                        c.setReadTimeout(8000);
+                        c.setRequestMethod("POST");
+                        c.setDoOutput(true);
+                        c.setRequestProperty("Content-Type", "application/json");
+                        byte[] body = "{}".getBytes("UTF-8");
+                        c.setFixedLengthStreamingMode(body.length);
+                        OutputStream os = c.getOutputStream();
+                        os.write(body); os.flush(); os.close();
+                        c.getResponseCode();
+                        c.disconnect();
+                        c = null;
+                    }
+                    Log.i(TAG, "session cleared");
+                } catch (Throwable t) {
+                    Log.i(TAG, "clear FAIL " + t);
+                } finally {
+                    if (c != null) c.disconnect();
+                }
+                handler.post(new Runnable() {
+                    public void run() { web.loadUrl(home); }
+                });
+            }
+        }).start();
     }
 
     // ------------------------------------------------------------ text field (platform IME)

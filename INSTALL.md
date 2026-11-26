@@ -324,7 +324,8 @@ The adapter also drops anything that still looks like a notice (⏳ Working, ite
   D-pad scrolls, the centre key pages.
 - 480×854 at 240dpi, system font scale 1.45 — the page sets `textZoom(100)`.
 - Soft keys: A1 Voice (F1), A2 Switch (F2), A3 Text (F3; the press also emits F4, which is
-  swallowed), A4 unused.
+  swallowed), A4 Clear (F5–F12 are all bound, because the code this handset sends for it is
+  not documented).
 - Text uses a native `EditText`, so the handset's own IME (iWnn) appears with kana, kanji
   conversion and prediction. `Done` sends (`IME_ACTION_SEND`), `BACK` closes. Nothing custom:
   the IME owns the keys while it is open, which is why the app does not intercept them.

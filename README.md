@@ -31,7 +31,8 @@ flowchart LR
 
 One process, no second server: the plugin inside Hermes is the only door. The phone has no
 push channel (no GMS), so it keeps one request open and the server answers it the moment there
-is something: instant delivery, and 360 wake-ups a day instead of 17,280.
+is something: instant delivery, and 360 wake-ups a day instead of 17,280 — or 48 a day when the
+phone and the Mac are on the same Wi-Fi and it can skip the tunnel.
 
 ## Three screens
 

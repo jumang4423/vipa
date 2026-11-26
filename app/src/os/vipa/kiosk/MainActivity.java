@@ -21,6 +21,9 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -37,7 +40,14 @@ import java.net.URL;
  */
 public class MainActivity extends Activity {
 
-    public static String SERVER = "http://192.168.2.101:8099";
+    // REMOTE is the tunnel address (or whatever /sdcard/vipa.url says). SERVER is where we
+    // actually talk right now: the same machine on the local network when it answers, because
+    // that path has no tunnel time limit and can hold a request for half an hour.
+    public static volatile String REMOTE = "http://192.168.2.101:8099";
+    public static volatile String SERVER = "http://192.168.2.101:8099";
+    public static volatile boolean onLan = false;
+    private static MainActivity inst = null;
+    private static android.content.Context appCtx = null;
     private String home = SERVER + "/";
     private static final String TAG = "VIPA";
     private static final int MAX_RETRY = 6;
@@ -60,7 +70,17 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
 
-        SERVER = resolveServer();
+        inst = this;
+        appCtx = getApplicationContext();
+        REMOTE = resolveServer();
+        String cached = getSharedPreferences("vipa", 0).getString("lan", "");
+        if (cached != null && cached.length() > 0) {
+            SERVER = cached;            // last time it answered; refreshBase() verifies it
+            onLan = true;
+        } else {
+            SERVER = REMOTE;
+            onLan = false;
+        }
         home = assetHome();
 
         requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -107,13 +127,16 @@ public class MainActivity extends Activity {
             @Override
             public void onReceivedSslError(WebView v, android.webkit.SslErrorHandler handler,
                                            android.net.http.SslError err) {
-                String host = null;
+                String host = null, remoteHost = null;
                 try {
                     host = new URL(SERVER).getHost();
+                    remoteHost = new URL(REMOTE).getHost();
                 } catch (Throwable ignored) {}
                 String failed = err == null ? null : err.getUrl();
-                // This phone only has 2015 CAs, so allow our own host only.
-                if (host != null && failed != null && failed.contains(host)) {
+                // This phone only has 2015 CAs, so allow our own hosts only (both the local
+                // address and the tunnel, because the page may still be on the old one).
+                if (failed != null && ((host != null && failed.contains(host))
+                        || (remoteHost != null && failed.contains(remoteHost)))) {
                     Log.i(TAG, "ssl: proceed " + failed);
                     handler.proceed();
                 } else {
@@ -230,6 +253,7 @@ public class MainActivity extends Activity {
         super.onResume();
         visible = true;
         refreshCharging();
+        refreshBaseAsync();
         if (web != null && pageReady) handler.post(new Runnable() {
             public void run() { web.loadUrl("javascript:try{pollForce()}catch(e){}"); }
         });
@@ -242,9 +266,99 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onDestroy() {
+        if (inst == this) inst = null;
+        super.onDestroy();
+    }
+
+    @Override
     protected void onPause() {
         visible = false;
         super.onPause();
+    }
+
+    // ------------------------------------------------------------ where is home
+
+    /** Hold lengths: the tunnel caps a held request at 5 minutes, a LAN socket does not. */
+    static int holdSeconds() {
+        return onLan ? 1800 : 240;
+    }
+
+    static int pageHoldSeconds() {
+        return onLan ? 300 : 60;
+    }
+
+    static void refreshBaseAsync() {
+        new Thread(new Runnable() {
+            public void run() {
+                try {
+                    refreshBase();
+                } catch (Throwable t) {
+                    Log.i(TAG, "refreshBase FAIL " + t);
+                }
+            }
+        }, "vipa-base").start();
+    }
+
+    /** Prefer the local address when it answers; learn it from /api/health over the tunnel. */
+    static synchronized void refreshBase() {
+        if (appCtx == null) return;
+        android.content.SharedPreferences sp = appCtx.getSharedPreferences("vipa", 0);
+
+        String lan = sp.getString("lan", "");
+        if (lan != null && lan.length() > 0 && probe(lan)) {
+            setBase(lan, true);
+            return;
+        }
+        JSONObject h = null;
+        try {
+            h = Box.getAt(REMOTE, "/api/health", 8000, 8000);
+        } catch (Throwable t) {
+            Log.i(TAG, "base: tunnel not answering " + t);
+        }
+        JSONArray arr = h == null ? null : h.optJSONArray("lan");
+        if (arr != null) {
+            for (int i = 0; i < arr.length(); i++) {
+                String cand = arr.optString(i, "");
+                if (cand.length() == 0) continue;
+                sp.edit().putString("lan", cand).apply();
+                if (probe(cand)) {
+                    setBase(cand, true);
+                    return;
+                }
+            }
+        }
+        setBase(REMOTE, false);
+    }
+
+    private static boolean probe(String base) {
+        try {
+            JSONObject o = Box.getAt(base, "/api/health", 800, 1500);
+            return o != null && o.optBoolean("ok", false);
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private static void setBase(String url, boolean lan) {
+        if (url.equals(SERVER) && lan == onLan) return;
+        SERVER = url;
+        onLan = lan;
+        Log.i(TAG, "base -> " + url + (lan ? " (lan)" : " (tunnel)"));
+        final MainActivity a = inst;
+        if (a == null) return;
+        a.handler.post(new Runnable() {
+            public void run() {
+                if (a.web == null) return;
+                a.home = a.assetHome();
+                a.web.loadUrl("javascript:try{setApi(" + jsonString(SERVER) + ");setHold("
+                        + pageHoldSeconds() + ")}catch(e){}");
+            }
+        });
+    }
+
+    private static String jsonString(String v) {
+        return "\"" + v.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
     // ------------------------------------------------------------ softkeys

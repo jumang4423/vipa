@@ -349,6 +349,27 @@ exemptions.
 3. **The socket must be reused.** `Box.get()` does not call `disconnect()` on success, so the
    TLS connection is pooled and a wake-up costs one small packet, not a handshake.
 
+### Same network: skip the tunnel
+
+`/api/health` reports `lan`: the machine's own address (for example
+`http://192.168.2.101:8099`). The app remembers the last one that answered and uses it while it
+does, because a LAN socket has no tunnel time limit:
+
+| | tunnel | same Wi-Fi |
+|---|---|---|
+| hold | 240 s | 1800 s |
+| requests/day | 360 | **48** |
+| delivery, screen off | 1 s (measured) | 1 s (measured) |
+| encryption | TLS | none (your own network, plain HTTP) |
+
+Measured after switching: **0 tunnel requests in 3 minutes**, and a push reached the phone in
+2 s with the screen off. Nothing to configure — the app learns the address from the tunnel on
+first run and falls back to the tunnel the moment the local one stops answering (verified by
+binding the adapter to `127.0.0.1` and watching it move to the tunnel, then back).
+
+Do not set `VIPA_LISTEN` to `127.0.0.1`: then only the tunnel can reach the adapter and the
+phone always uses the slow path.
+
 ### What it costs
 
 | | requests/day | relative |

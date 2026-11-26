@@ -17,7 +17,6 @@ import org.json.JSONObject;
 final class Waiter {
 
     private static final String TAG = "VIPA";
-    private static final int HOLD = 240;             // seconds the server may hold the request
     private static final long STALE = 20 * 60 * 1000L;
 
     private static Thread thread;
@@ -49,18 +48,17 @@ final class Waiter {
     private static void loop(Context app) {
         long backoff = 0;
         while (true) {
-            // While the screen is on, the page holds its own request; do not double the traffic.
-            if (MainActivity.visible) {
-                sleep(3000);
-                continue;
-            }
+            // This thread holds one request whether or not the page is open on top of it: it is
+            // what posts the notification, and the page's own request can die with the WebView.
+            // Two concurrent holds cost one extra request per hold length — nothing.
             try {
                 SharedPreferences sp = app.getSharedPreferences("vipa", 0);
                 int last = sp.getInt("lastSeq", 0);
+                int hold = MainActivity.holdSeconds();
                 long t0 = System.currentTimeMillis();
-                Log.i(TAG, "hold since=" + last);
-                JSONObject o = Box.get("/api/wait?since=" + last + "&timeout=" + HOLD,
-                        12000, (HOLD + 30) * 1000);
+                Log.i(TAG, "hold since=" + last + " for " + hold + "s");
+                JSONObject o = Box.get("/api/wait?since=" + last + "&timeout=" + hold,
+                        12000, (hold + 30) * 1000);
                 Log.i(TAG, "hold done " + (System.currentTimeMillis() - t0) + "ms");
                 lastOk = System.currentTimeMillis();
                 backoff = 0;
@@ -72,6 +70,7 @@ final class Waiter {
             } catch (Throwable t) {
                 backoff = backoff == 0 ? 5000 : Math.min(backoff * 2, 300000);
                 Log.i(TAG, "wait FAIL " + t + " retry in " + backoff + "ms");
+                MainActivity.refreshBase();     // the local address may be gone; try the tunnel
                 sleep(backoff);
             }
         }

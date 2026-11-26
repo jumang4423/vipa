@@ -27,6 +27,7 @@ import json
 import logging
 import os
 import re
+import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -472,6 +473,24 @@ class VipaAdapter(BasePlatformAdapter):
             self._wake.wait(min(left, 30))
             self._wake.clear()
 
+    def _lan_urls(self):
+        """Where this machine can be reached on the same network, so the phone can skip
+        the tunnel. Best effort: the first address is usually the one on the Wi-Fi."""
+        out = []
+        try:
+            _, _, port = self.listen.partition(":")
+            sk = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                sk.connect(("8.8.8.8", 80))       # no packet is sent; this just picks the route
+                ip = sk.getsockname()[0]
+            finally:
+                sk.close()
+            if ip and not ip.startswith("127."):
+                out.append("http://%s:%s" % (ip, port))
+        except Exception as e:
+            log.debug("vipa: lan detect: %s", e)
+        return out
+
     def _schedule(self):
         """The day as the phone shows it. Edit schedule.json; nothing else to touch."""
         try:
@@ -625,7 +644,8 @@ class VipaAdapter(BasePlatformAdapter):
                 path, _, query = self.path.partition("?")
                 if path == "/api/health":
                     self._send(200, {"ok": True, "seq": adapter._seq,
-                                     "stt": bool(adapter.groq_key)})
+                                     "stt": bool(adapter.groq_key),
+                                     "lan": adapter._lan_urls()})
                 elif path == "/api/day":
                     day = None
                     for kv in query.split("&"):

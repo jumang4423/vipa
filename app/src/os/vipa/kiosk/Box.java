@@ -32,9 +32,13 @@ final class Box {
 
     /** GET path and parse it. Returns null on a non-200. Throws on network trouble. */
     static JSONObject get(String path, int connectMs, int readMs) throws Exception {
+        return getAt(MainActivity.SERVER, path, connectMs, readMs);
+    }
+
+    static JSONObject getAt(String base, String path, int connectMs, int readMs) throws Exception {
         HttpURLConnection c = null;
         try {
-            c = (HttpURLConnection) new URL(MainActivity.SERVER + path).openConnection();
+            c = (HttpURLConnection) new URL(base + path).openConnection();
             Tls.relax(c);
             c.setConnectTimeout(connectMs);
             c.setReadTimeout(readMs);

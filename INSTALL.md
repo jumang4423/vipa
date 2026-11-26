@@ -263,30 +263,37 @@ uv pip install --python "$PY" ddgs
 
 Restart the gateway afterwards. Verified: `web_search` answers from the phone.
 
-### Browser work goes through the user's own Brave
+### Browser work: pick one, and do not leave it implicit
 
-Do not let the agent drive its own Chromium: that profile is empty, so every site asks it to log
-in again. Delete the bundled build (367 MB, regenerable with `hermes pm install chromium`) and
-route browser work through the real browser instead:
+There are two ways for the agent to open a page, and they behave differently:
 
-```bash
-rm -rf ~/.hermes/tools/chromium-1248
+| | |
+|---|---|
+| Hermes' own Chromium | nothing to configure; its profile is empty, so every site asks it to log in again. It also auto-closes after `browser.inactivity_timeout` (120s) |
+| your own browser, over MCP | uses the logins you already have; needs the Playwright browser extension and its token |
+
+If a site needs a login (bus or train booking, a member page), the second one is the only one
+that works. Which browser is up to you — Chrome, Brave, Edge, anything with the extension. Do
+not hard-code a path into this repo; the maintainer's browser is not the reader's.
+
+Either leave the default (Hermes' Chromium) and accept the logins, or wire your own:
+
+```yaml
+mcp_servers:
+  browser:                       # any name
+    command: node
+    args: ["<path>/\@playwright/mcp/cli.js", "--extension"]
+    env:
+      PLAYWRIGHT_MCP_EXTENSION_TOKEN: "<from the extension popup>"
+      PLAYWRIGHT_MCP_EXECUTABLE_PATH: "<path to your browser binary>"
 ```
+
+If you would rather keep them apart, disable the built-in tool and use only MCP:
 
 ```yaml
 agent:
   disabled_toolsets: [browser]
-mcp_servers:
-  playwright-brave:
-    command: node
-    args: [".../@playwright/mcp/cli.js", "--extension"]
-    env:
-      PLAYWRIGHT_MCP_EXTENSION_TOKEN: "<from the Playwright extension popup>"
-      PLAYWRIGHT_MCP_EXECUTABLE_PATH: "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
 ```
-
-Verified with the bundled Chromium deleted and `browser` disabled: the agent still opened a page
-and read its title, through Brave, using the user's existing logins.
 
 ## Silence on the phone
 

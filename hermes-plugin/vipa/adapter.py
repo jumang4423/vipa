@@ -110,6 +110,16 @@ def _day_path(day=None):
     return os.path.join(DAYS, day + ".json"), day
 
 
+def _ts_key(entry):
+    """Sort by clock time, tolerant of '9:05' vs '10:00'."""
+    raw = str(entry.get("ts") or "99:99")
+    hh, _, mm = raw.partition(":")
+    try:
+        return (int(hh), int(mm or 0))
+    except ValueError:
+        return (99, 99)
+
+
 def read_day(day=None):
     path, day = _day_path(day)
     try:
@@ -121,7 +131,7 @@ def read_day(day=None):
         log.warning("vipa: %s is unreadable (%s); treating it as empty", path, e)
         data = {}
     entries = data.get("entries") or []
-    entries.sort(key=lambda e: e.get("ts") or "")
+    entries.sort(key=_ts_key)
     return {"date": day, "entries": entries}
 
 
@@ -157,7 +167,7 @@ def log_entry(kind, text="", kcal=None, kg=None, ts=None):
     with _DAY_LOCK:
         data = read_day(day)
         data["entries"].append(entry)
-        data["entries"].sort(key=lambda e: e.get("ts") or "")
+        data["entries"].sort(key=_ts_key)
         tmp = path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)

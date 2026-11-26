@@ -119,6 +119,29 @@ else:
     print("  config: appended platforms")
 PY
 
+# 3c. the plugin's tools live in the `hermes-vipa` toolset. That name is also the implicit
+# default toolset for a plugin platform, so registering into it would shadow every built-in
+# tool (web search, browser, terminal). Keep the platform's toolsets explicit.
+python3 - "$CFG" <<'PY3'
+import re, sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+if re.search(r'^platform_toolsets:[ \t]*$', s, re.M):
+    if not re.search(r'^  vipa:', s, re.M):
+        s = re.sub(r'^platform_toolsets:[ \t]*$',
+                   "platform_toolsets:\n  vipa: [hermes-cli, hermes-vipa]", s, count=1, flags=re.M)
+        open(p, "w", encoding="utf-8").write(s)
+        print("  config: platform_toolsets.vipa set")
+    else:
+        print("  config: platform_toolsets.vipa already present")
+else:
+    if not s.endswith("\n"):
+        s += "\n"
+    s += "\nplatform_toolsets:\n  vipa: [hermes-cli, hermes-vipa]\n"
+    open(p, "w", encoding="utf-8").write(s)
+    print("  config: platform_toolsets appended")
+PY3
+
 # ---------------------------------------------------------------- 4. gateway
 # Restarting is NOT done here on purpose: Hermes refuses to run, from inside a gateway
 # session, any command that could stop the gateway — and that judgement covers this script

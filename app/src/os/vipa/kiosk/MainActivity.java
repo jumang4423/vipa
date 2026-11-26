@@ -160,6 +160,13 @@ public class MainActivity extends Activity {
         return charging ? 60L * 1000L : 5L * 60L * 1000L;
     }
 
+    /** Refresh, and say whether the answer actually changed (battery broadcasts are frequent). */
+    private boolean chargingChanged() {
+        boolean before = charging;
+        refreshCharging();
+        return before != charging;
+    }
+
     private void refreshCharging() {
         try {
             android.content.Intent i = registerReceiver(null,
@@ -179,8 +186,10 @@ public class MainActivity extends Activity {
             android.content.BroadcastReceiver r = new android.content.BroadcastReceiver() {
                 @Override
                 public void onReceive(android.content.Context c, android.content.Intent i) {
-                    refreshCharging();
-                    if (web != null) handler.post(new Runnable() {
+                    // ACTION_BATTERY_CHANGED arrives every few seconds; only a real change of
+                    // the charger may interrupt the request the page is holding.
+                    if (!chargingChanged() || web == null) return;
+                    handler.post(new Runnable() {
                         public void run() { web.loadUrl("javascript:try{pollForce()}catch(e){}"); }
                     });
                 }

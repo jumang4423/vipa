@@ -46,6 +46,8 @@ public class MainActivity extends Activity {
     private FrameLayout root;
     private LinearLayout textOverlay;
     private EditText textInput;
+    private long lastF3 = 0L;
+    private boolean pageReady = false;
     private int retry = 0;
     private final Handler handler = new Handler();
     private final String[] skLabels = {"Voice", "Switch", "Text", "Clear"};
@@ -95,6 +97,11 @@ public class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView v, String url) {
                 if (url == null) return true;
                 return !(url.startsWith(SERVER) || url.startsWith("file://"));
+            }
+
+            @Override
+            public void onPageFinished(WebView v, String url) {
+                pageReady = true;
             }
 
             @Override
@@ -168,7 +175,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         visible = true;
-        if (web != null) handler.post(new Runnable() {
+        if (web != null && pageReady) handler.post(new Runnable() {
             public void run() { web.loadUrl("javascript:poll()"); }
         });
     }
@@ -337,6 +344,7 @@ public class MainActivity extends Activity {
                 toggleVoice(); return true;
             }
             if (c == KeyEvent.KEYCODE_F3) {          // bottom-left: the platform text field
+                lastF3 = System.currentTimeMillis();
                 if (textOverlay.getVisibility() == View.VISIBLE) {
                     hideTextEntry();
                 } else {
@@ -345,8 +353,11 @@ public class MainActivity extends Activity {
                 }
                 return true;
             }
-            if (c == KeyEvent.KEYCODE_F4) {          // same physical press sends F3 then F4
-                return true;
+            if (c == KeyEvent.KEYCODE_F4) {
+                // A3 (Text) sends F3 immediately followed by F4. A lone F4 is the
+                // bottom-right (Clear) key, which this handset does not document.
+                if (System.currentTimeMillis() - lastF3 < 400L) return true;
+                confirmClear(); return true;
             }
             if (c >= KeyEvent.KEYCODE_F5 && c <= KeyEvent.KEYCODE_F12) {   // bottom-right: clear
                 confirmClear();

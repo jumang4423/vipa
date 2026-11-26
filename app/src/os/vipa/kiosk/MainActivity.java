@@ -310,6 +310,13 @@ public class MainActivity extends Activity {
             if (c == KeyEvent.KEYCODE_DPAD_RIGHT) {
                 web.loadUrl("javascript:navLR(1)"); return true;
             }
+            if (c == KeyEvent.KEYCODE_DEL || c == KeyEvent.KEYCODE_CLEAR
+                    || c == KeyEvent.KEYCODE_FORWARD_DEL) {   // クリア/削除は WebView に届かない
+                web.loadUrl("javascript:typeBackspace()"); return true;
+            }
+            if (c == KeyEvent.KEYCODE_POUND) {       // # never reaches the WebView
+                web.loadUrl("javascript:typeSpace()"); return true;
+            }
             if (c == KeyEvent.KEYCODE_F2) {          // top-right: switch view
                 web.loadUrl("javascript:toggleView()"); return true;
             }

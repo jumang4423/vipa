@@ -156,7 +156,7 @@
 
   <div class="type" id="type">
     <div class="row"><div id="type-box" class="box"><span id="type-val"></span><b id="caret">|</b></div></div>
-    <div class="hint">1-9 = かな (tap again to cycle) &nbsp; 0 = わをん &nbsp; # = 数字 &nbsp; * = 削除<br>center = send &nbsp;&nbsp; Text = close</div>
+    <div class="hint">1-9 = かな（連打で送り） &nbsp; 0 = わをん &nbsp; * = 数字/かな &nbsp; # = 空白<br>センター = 送信 &nbsp; Text = 閉じる &nbsp; クリア/削除 = 1文字消す</div>
     <div class="prev" id="type-prev"></div>
   </div>
 
@@ -593,6 +593,10 @@ function typeKey(ch) {
   return false;
 }
 
+function typeBackspace() { if (typeOn) backspace(); }
+
+function typeSpace() { if (typeOn) { commitPending(); typeText += ' '; paintType(); } }
+
 function backspace() {
   if (pendingRow) { pendingRow = null; pendingIdx = 0; paintType(); return; }
   typeText = typeText.slice(0, -1);
@@ -628,12 +632,14 @@ function sendText() {
 document.addEventListener('keydown', function (e) {
   if (!typeOn) return;
   var k = e.key;
-  if (e.keyCode === 8 || e.keyCode === 46 || e.keyCode === 67) {             // DEL / Backspace
+  var c = e.keyCode;
+  // delete: Backspace/DEL/CLEAR/FORWARD_DEL and the keypad's クリア
+  if (c === 8 || c === 28 || c === 46 || c === 67 || c === 127 || k === 'Clear' || k === 'Delete') {
     backspace(); e.preventDefault(); return;
   }
-  if (e.keyCode === 17) { backspace(); e.preventDefault(); return; }        // STAR
-  if (e.keyCode === 18) { numeric = !numeric; paintType(); e.preventDefault(); return; }  // POUND
-  if (k === '#' || k === '*') { if (k === '*') numeric = !numeric; paintType(); e.preventDefault(); return; }
+  if (k === '*') { numeric = !numeric; paintType(); e.preventDefault(); return; }
+  if (k === '#') { backspace(); e.preventDefault(); return; }   // # は削除（死んでいた枠を活かす）
+  console.log('key ' + c + ' "' + k + '"');
   if (typeKey(k)) { e.preventDefault(); return; }
   if (k && k.length === 1) { commitPending(); typeText += k; paintType(); e.preventDefault(); }
 });

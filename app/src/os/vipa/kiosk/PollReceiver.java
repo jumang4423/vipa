@@ -22,6 +22,7 @@ public class PollReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(final Context c, Intent i) {
         final Context ctx = c.getApplicationContext();
+        MainActivity.initServer(ctx);   // the process may have been started by this alarm
         Waiter.ensure(ctx);
 
         if (MainActivity.visible || Waiter.fresh()) {

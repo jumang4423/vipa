@@ -43,6 +43,7 @@ final class Waiter {
     static void ensure(Context c) {
         synchronized (Waiter.class) {
             if (thread != null && thread.isAlive()) return;
+            MainActivity.initServer(c);
             final Context app = c.getApplicationContext();
             thread = new Thread(new Runnable() {
                 public void run() {

@@ -48,6 +48,7 @@ public class MainActivity extends Activity {
     public static volatile String SERVER = "http://192.168.2.101:8099";
     public static volatile boolean onLan = false;
     private static MainActivity inst = null;
+    private static android.content.Context sCtx = null;
     private static android.content.Context appCtx = null;
     private String home = SERVER + "/";
     private static final String TAG = "VIPA";
@@ -74,6 +75,7 @@ public class MainActivity extends Activity {
 
         inst = this;
         appCtx = getApplicationContext();
+        sCtx = appCtx;
         REMOTE = resolveServer();
         SERVER = REMOTE;
         home = assetHome();
@@ -536,10 +538,31 @@ public class MainActivity extends Activity {
     }
 
     private void saveUrl(String url) {
+        saveUrl(sCtx, url);
+    }
+
+    private static void saveUrl(android.content.Context ctx, String url) {
         try {
-            getSharedPreferences("vipa", 0).edit().putString("url", url).apply();
+            if (ctx == null) return;
+            ctx.getSharedPreferences("vipa", 0).edit().putString("url", url).apply();
         } catch (Throwable ignored) {
         }
+    }
+
+    /** Resolve the server address without an Activity (the alarm may start the process). */
+    static void initServer(android.content.Context ctx) {
+        if (ctx != null) sCtx = ctx.getApplicationContext();
+        String u = readUrlFile();
+        if (u == null && sCtx != null) {
+            String saved = sCtx.getSharedPreferences("vipa", 0).getString("url", "");
+            if (saved != null && saved.length() > 0) u = saved;
+        }
+        if (u == null || u.length() == 0) return;      // nothing better than the default yet
+        if (u.equals(SERVER)) return;
+        SERVER = u;
+        REMOTE = u;
+        Log.i(TAG, "server (init): " + u);
+        saveUrl(sCtx, u);
     }
 
     /** Wait for the SD card, then use the address it holds. */

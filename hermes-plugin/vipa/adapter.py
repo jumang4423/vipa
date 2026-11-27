@@ -50,6 +50,21 @@ MAX_CHARS = int(os.environ.get("VIPA_MAX_CHARS") or 0)
 
 
 
+CRON_HEAD = re.compile(r"\A\s*Cronjob Response:[^\n]*\n(?:\s*\([^)]*\)\s*\n)?-{3,}\s*\n+")
+CRON_TAIL = re.compile(r"\n+\s*To stop or manage this job,[^\n]*\s*\Z")
+
+
+def unwrap_cron(text):
+    """Strip the 'Cronjob Response: ...' wrapper and the management footer.
+
+    The wrapper is meant for a chat window; on a 480px phone it is the whole screen and it
+    pushes the actual message out of the notification preview.
+    """
+    t = text or ""
+    stripped = CRON_TAIL.sub("", CRON_HEAD.sub("", t)).strip()
+    return stripped or t.strip()
+
+
 def condense(text, limit=None):
     """One short line, but never a sentence cut in half.
 
@@ -430,6 +445,10 @@ class VipaAdapter(BasePlatformAdapter):
     # ---------------------------------------------------------------- outbox
 
     def _push(self, role, text):
+        if role == "assistant":
+            text = unwrap_cron(text)      # every path, not just send()
+            if not text:
+                return self._seq
         with self._lock:
             self._seq += 1
             self._out.append({
@@ -559,7 +578,7 @@ class VipaAdapter(BasePlatformAdapter):
 
     async def send(self, chat_id, content, reply_to=None, metadata=None):
         self._last_activity = time.time()
-        text = condense(content)
+        text = condense(unwrap_cron(content))
         if not text:
             return SendResult(success=False)
         if self.is_noise(text):

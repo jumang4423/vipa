@@ -325,13 +325,14 @@ public class MainActivity extends Activity {
         super.onPause();
     }
 
-    /** How long one request may be held: ngrok cuts a request at 5 minutes. */
+    /** How long one request may be held: ngrok cuts a request at 5 minutes, so 60 s is safe.
+     *  One minute is the user's chosen cadence — four times the traffic of four minutes. */
     static int holdSeconds() {
-        return onLan ? 120 : 240;
+        return 60;
     }
 
     static int pageHoldSeconds() {
-        return onLan ? 120 : 60;
+        return 60;
     }
 
     // ------------------------------------------------------------ which entrance

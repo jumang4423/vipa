@@ -59,13 +59,16 @@ final class Waiter {
     private static void loop(Context app) {
         long backoff = 0;
         while (true) {
-            // This thread holds one request whether or not the page is open on top of it: it is
-            // what posts the notification, and the page's own request can die with the WebView.
-            // Two concurrent holds cost one extra request per hold length — nothing.
+            // While the page holds its own request, this one stands down: two requests a minute
+            // doubles the traffic. If the page ever dies, STALE lets the alarm take over.
             // While running on the fallback, look for the tunnel once per hold so the phone
             // goes back to the normal entrance by itself.
             if (MainActivity.onLan) {
                 MainActivity.chooseBase();
+            }
+            if (MainActivity.visible) {
+                sleep(3000);
+                continue;
             }
             try {
                 SharedPreferences sp = app.getSharedPreferences("vipa", 0);

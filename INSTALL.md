@@ -320,8 +320,9 @@ silenced by its own agent):
 2. **Match the run time and the text.** A job that fires at 13:50 and is told to say "2pm" will
    decide it is early and stay quiet.
 
-`install.sh` writes rule 1 into the agent's memory (`~/.hermes/memories/MEMORY.md`), so jobs the
-agent creates later carry it without being asked.
+The rules live in `philosophy.md`, which is part of every vipa turn's prompt (`platform_hint`).
+So when the user asks the phone for a reminder, the agent that creates the job already has
+them — no memory entry is written and nothing outside this repository is edited.
 
 Diagnosing a missing notification:
 

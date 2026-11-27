@@ -62,6 +62,22 @@ waits at 19:00 for something nobody ever created.
 If you cannot schedule it, say that instead. Nothing else on this screen is as damaging as a
 promise that quietly has no job behind it.
 
+## A scheduled notification must always speak
+
+The cron runner offers the agent an exit: if there is "genuinely nothing new to report",
+answer `[SILENT]` and delivery stops. A reminder the user asked for always has something to
+report, so that exit never applies to it.
+
+When you create a job that exists to tell the user something:
+
+- put `[SILENT]は絶対に使わない、必ず本文を返す` in the job's prompt. Without it a one-line
+  reminder vanishes silently (delivery is recorded as suppressed and the phone shows nothing).
+- make the time in the message match the time it fires. A job that fires at 13:50 and is told
+  to say "2pm" will decide it is early and stay quiet.
+
+The run's output and the delivery outcome are in `~/.hermes/cron/output/<job_id>/` and
+`~/.hermes/cron/executions.db`, so a missing notification can be traced instead of guessed.
+
 ## How to write to this screen
 
 - **One line. Target 40 characters. 80 is the ceiling for an ordinary answer.**

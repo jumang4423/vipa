@@ -297,6 +297,46 @@ agent:
   disabled_toolsets: [browser]
 ```
 
+## Scheduled notifications
+
+A cron job is a fresh agent run, and the shared cron prompt gives it an exit: *"if there is
+genuinely nothing new to report, respond with exactly `[SILENT]`"*. A one-line reminder written
+without anything else will take that exit and vanish — `delivery_outcome=suppressed`, nothing in
+the outbox, nothing on the phone. The phone is not at fault.
+
+Write the prohibition into every notification job:
+
+```bash
+hermes cron create "in 10m" \
+  "通知。日本語で一文だけ:「14時です」。前置き・説明・締めは書かない。[SILENT]は絶対に使わない。報告事項がなくても必ず本文を返す。" \
+  --name "14時通知" --deliver vipa
+```
+
+Two rules, both learned the hard way (2026-11-27, a 13:50 reminder that said "2時です" was
+silenced by its own agent):
+
+1. **`[SILENT]` 禁止 in the prompt.** The agent must be told that a notification always has
+   something to say.
+2. **Match the run time and the text.** A job that fires at 13:50 and is told to say "2pm" will
+   decide it is early and stay quiet.
+
+`install.sh` writes rule 1 into the agent's memory (`~/.hermes/memories/MEMORY.md`), so jobs the
+agent creates later carry it without being asked.
+
+Diagnosing a missing notification:
+
+```bash
+sqlite3 ~/.hermes/cron/executions.db \
+  "select job_id,status,delivery_outcome,started_at from executions order by rowid desc limit 5;"
+```
+
+`delivered` = it reached the box. `suppressed` = the agent answered `[SILENT]`.
+The run's exact output is kept in `~/.hermes/cron/output/<job_id>/`.
+
+The adapter also strips the cron wrapper (`Cronjob Response: …` / `(job_id: …)` / the
+"To stop or manage this job" footer) so the phone shows the message itself — otherwise the
+notification preview is the header.
+
 ## Silence on the phone
 
 Hermes sends tool progress and "still working" heartbeats to messaging platforms by default.

@@ -187,6 +187,35 @@ else
   say "web search: skipped (uv or the gateway venv not found)"
 fi
 
+# 3f. cron notifications. The shared cron prompt offers the agent an exit — "if there is
+# genuinely nothing new to report, answer [SILENT]" — so a one-line reminder written without
+# the prohibition disappears with delivery_outcome=suppressed and the phone shows nothing.
+# The adapter strips the cron wrapper (Cronjob Response: / job_id / footer); this writes the
+# prompt rule into the agent's memory so every job it creates carries it.
+mkdir -p "$H/memories" 2>/dev/null && chmod 700 "$H/memories" 2>/dev/null || true
+python3 - "$H/memories/MEMORY.md" <<'PY4B'
+import os, sys
+
+p = sys.argv[1]
+rule = ("vipa への cron 通知ジョブは、プロンプトに必ず「[SILENT]は絶対に使わない、必ず本文を返す」"
+        "と書く。Hermes の共通 cron 指示が「報告事項なし → [SILENT] で配送停止」を含むため、"
+        "短い通知をそのまま書くと届かずに消える（executions.db の delivery_outcome=suppressed）。"
+        "時報系は実行時刻と本文の時刻を合わせる。")
+try:
+    s = open(p, encoding="utf-8").read()
+except FileNotFoundError:
+    s = ""
+if "[SILENT]は絶対に使わない" in s:
+    print("  memory: cron rule already present")
+else:
+    if s and not s.endswith("\n"):
+        s += "\n"
+    s += ("\u00a7\n" if s.strip() else "") + rule + "\n"
+    open(p, "w", encoding="utf-8").write(s)
+    os.chmod(p, 0o600)
+    print("  memory: cron notification rule added")
+PY4B
+
 # ---------------------------------------------------------------- 4. gateway
 # Restarting is NOT done here on purpose: Hermes refuses to run, from inside a gateway
 # session, any command that could stop the gateway — and that judgement covers this script

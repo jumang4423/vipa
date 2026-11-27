@@ -43,7 +43,8 @@ public class MainActivity extends Activity {
     // The tunnel (/sdcard/vipa.url, the ngrok URL) is the only normal entrance: it works at
     // home and outside, so a SIM changes nothing. The local address is a *fallback* for when
     // ngrok is down, and the app returns to the tunnel as soon as it answers again.
-    public static volatile String REMOTE = "http://192.168.2.101:8099";
+    private static final String DEFAULT_URL = "http://192.168.2.101:8099";
+    public static volatile String REMOTE = DEFAULT_URL;
     public static volatile String SERVER = "http://192.168.2.101:8099";
     public static volatile boolean onLan = false;
     private static MainActivity inst = null;
@@ -76,6 +77,11 @@ public class MainActivity extends Activity {
         REMOTE = resolveServer();
         SERVER = REMOTE;
         home = assetHome();
+        if (!REMOTE.equals(DEFAULT_URL)) {
+            saveUrl(REMOTE);
+        } else {
+            retryUrl(1);      // /sdcard is not always mounted when the kiosk starts
+        }
 
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
@@ -284,6 +290,15 @@ public class MainActivity extends Activity {
         super.onResume();
         visible = true;
         refreshCharging();
+        String u = readUrlFile();
+        if (u != null && !u.equals(SERVER)) {
+            SERVER = u;
+            REMOTE = u;
+            saveUrl(u);
+            Log.i(TAG, "server changed: " + u);
+            home = assetHome();
+            if (web != null && pageReady) web.loadUrl(home);
+        }
         chooseBaseAsync();
         if (web != null && pageReady) handler.post(new Runnable() {
             public void run() { web.loadUrl("javascript:try{pollForce()}catch(e){}"); }
@@ -488,26 +503,64 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Use /sdcard/vipa.url when present, else the built-in default. */
+    /** Use /sdcard/vipa.url when present, else the last one we read, else the built-in. */
     private String resolveServer() {
+        String u = readUrlFile();
+        if (u != null) {
+            Log.i(TAG, "server from file: " + u);
+            return u;
+        }
+        String saved = getSharedPreferences("vipa", 0).getString("url", "");
+        if (saved != null && saved.length() > 0) {
+            Log.i(TAG, "server from memory: " + saved);
+            return saved;
+        }
+        return DEFAULT_URL;
+    }
+
+    private static String readUrlFile() {
         try {
             java.io.File f = new java.io.File("/sdcard/vipa.url");
-            if (f.exists()) {
-                java.io.BufferedReader r = new java.io.BufferedReader(
-                        new java.io.FileReader(f));
-                String line = r.readLine();
-                r.close();
-                if (line != null && line.trim().length() > 0) {
-                    String u = line.trim();
-                    if (u.endsWith("/")) u = u.substring(0, u.length() - 1);
-                    Log.i(TAG, "server from file: " + u);
-                    return u;
-                }
-            }
+            if (!f.exists()) return null;
+            java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(f));
+            String line = r.readLine();
+            r.close();
+            if (line == null || line.trim().length() == 0) return null;
+            String u = line.trim();
+            if (u.endsWith("/")) u = u.substring(0, u.length() - 1);
+            return u;
         } catch (Throwable t) {
             Log.i(TAG, "url file n/a " + t);
+            return null;
         }
-        return SERVER;
+    }
+
+    private void saveUrl(String url) {
+        try {
+            getSharedPreferences("vipa", 0).edit().putString("url", url).apply();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** Wait for the SD card, then use the address it holds. */
+    private void retryUrl(final int attempt) {
+        if (attempt > 6) return;
+        handler.postDelayed(new Runnable() {
+            public void run() {
+                String u = readUrlFile();
+                if (u == null) {
+                    retryUrl(attempt + 1);
+                    return;
+                }
+                saveUrl(u);
+                if (u.equals(SERVER)) return;
+                SERVER = u;
+                REMOTE = u;
+                Log.i(TAG, "server from file (late): " + u);
+                home = assetHome();
+                if (web != null && pageReady) web.loadUrl(home);
+            }
+        }, 5000L * attempt);
     }
 
     private int dip(int v) {

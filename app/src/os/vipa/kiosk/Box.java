@@ -118,7 +118,8 @@ final class Box {
 
     /** /sdcard/vipa-notify.<ext> if present, else the system default. */
     private static android.net.Uri notificationSound() {
-        for (String n : new String[]{"vipa-notify.mp3", "vipa-notify.m4a", "vipa-notify.ogg"}) {
+        for (String n : new String[]{"vipa-notify.wav", "vipa-notify.mp3",
+                                     "vipa-notify.m4a", "vipa-notify.ogg"}) {
             java.io.File f = new java.io.File("/sdcard/" + n);
             if (f.exists() && f.length() > 0) return android.net.Uri.fromFile(f);
         }

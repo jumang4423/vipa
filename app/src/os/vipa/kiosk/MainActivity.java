@@ -298,6 +298,12 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         visible = true;
+        try {
+            if (web != null) {
+                web.resumeTimers();
+                web.onResume();
+            }
+        } catch (Throwable ignored) {}
         refreshCharging();
         String u = readUrlFile();
         if (u != null && !u.equals(SERVER)) {
@@ -331,6 +337,14 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         visible = false;
+        // The WebView keeps its timers running while the screen is off, so the page would keep
+        // polling and mark messages as "seen" that nobody saw — and the notification never fires.
+        try {
+            if (web != null) {
+                web.pauseTimers();
+                web.onPause();
+            }
+        } catch (Throwable ignored) {}
         super.onPause();
     }
 
@@ -358,12 +372,25 @@ public class MainActivity extends Activity {
         return fastMode() ? 5 : 60;
     }
 
+    static boolean isAwake() {
+        try {
+            if (!visible || sCtx == null) return false;
+            android.os.PowerManager pm = (android.os.PowerManager)
+                    sCtx.getSystemService(android.content.Context.POWER_SERVICE);
+            return pm.isScreenOn();
+        } catch (Throwable t) {
+            return visible;
+        }
+    }
+
     /** The page reports what it actually drew, so a message read on screen is never
      *  announced again as a notification when the phone is closed. */
     public class Bridge {
         @android.webkit.JavascriptInterface
         public void seen(int seq) {
             if (seq < 0) return;
+            // Only what was drawn on a screen someone was looking at counts as seen.
+            if (!isAwake()) return;
             try {
                 android.content.SharedPreferences sp = getSharedPreferences("vipa", 0);
                 // 0 is a real state: the box was emptied, so nothing has been seen yet.

@@ -116,6 +116,15 @@ final class Box {
         }
     }
 
+    /** /sdcard/vipa-notify.<ext> if present, else the system default. */
+    private static android.net.Uri notificationSound() {
+        for (String n : new String[]{"vipa-notify.mp3", "vipa-notify.m4a", "vipa-notify.ogg"}) {
+            java.io.File f = new java.io.File("/sdcard/" + n);
+            if (f.exists() && f.length() > 0) return android.net.Uri.fromFile(f);
+        }
+        return null;
+    }
+
     private static void notify(Context ctx, String text) {
         try {
             NotificationManager nm =
@@ -135,6 +144,8 @@ final class Box {
                     .setContentIntent(pi)
                     .setAutoCancel(true)
                     .setWhen(System.currentTimeMillis());
+            android.net.Uri snd = notificationSound();
+            if (snd != null) nb.setSound(snd);
             nm.notify(3000, nb.build());
 
             android.os.Vibrator v =

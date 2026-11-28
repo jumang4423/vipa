@@ -125,6 +125,7 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView v, String url) {
                 pageReady = true;
+                v.loadUrl("javascript:try{setHold(" + pageHoldSeconds() + ")}catch(e){}");
             }
 
             @Override
@@ -251,9 +252,14 @@ public class MainActivity extends Activity {
                 public void onReceive(android.content.Context c, android.content.Intent i) {
                     // ACTION_BATTERY_CHANGED arrives every few seconds; only a real change of
                     // the charger may interrupt the request the page is holding.
-                    if (!chargingChanged() || web == null) return;
+                    if (!chargingChanged()) return;
+                    Waiter.wake();
+                    if (web == null) return;
                     handler.post(new Runnable() {
-                        public void run() { web.loadUrl("javascript:try{pollForce()}catch(e){}"); }
+                        public void run() {
+                            web.loadUrl("javascript:try{setHold(" + pageHoldSeconds()
+                                    + ");pollForce()}catch(e){}");
+                        }
                     });
                 }
             };
@@ -304,7 +310,9 @@ public class MainActivity extends Activity {
         }
         chooseBaseAsync();
         if (web != null && pageReady) handler.post(new Runnable() {
-            public void run() { web.loadUrl("javascript:try{pollForce()}catch(e){}"); }
+            public void run() {
+                web.loadUrl("javascript:try{setHold(" + pageHoldSeconds() + ");pollForce()}catch(e){}");
+            }
         });
     }
 
@@ -326,14 +334,28 @@ public class MainActivity extends Activity {
         super.onPause();
     }
 
-    /** How long one request may be held: ngrok cuts a request at 5 minutes, so 60 s is safe.
-     *  One minute is the user's chosen cadence — four times the traffic of four minutes. */
+    /** Charging on Wi-Fi is free of both battery and data, so it checks every 5 s.
+     *  Everything else stays at one check a minute. */
+    static boolean fastMode() {
+        if (!charging || sCtx == null) return false;
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
+                    sCtx.getSystemService(android.content.Context.CONNECTIVITY_SERVICE);
+            android.net.NetworkInfo ni = cm.getActiveNetworkInfo();
+            return ni != null && ni.isConnected()
+                    && ni.getType() == android.net.ConnectivityManager.TYPE_WIFI;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** How long one request may be held: ngrok cuts a request at 5 minutes. */
     static int holdSeconds() {
-        return 60;
+        return fastMode() ? 5 : 60;
     }
 
     static int pageHoldSeconds() {
-        return 60;
+        return fastMode() ? 5 : 60;
     }
 
     /** The page reports what it actually drew, so a message read on screen is never

@@ -78,26 +78,22 @@ final class Box {
         if (o == null) return;
         try {
             SharedPreferences sp = ctx.getSharedPreferences("vipa", 0);
-            int last = sp.getInt("lastSeq", 0);
-            boolean initialised = sp.getBoolean("init", false);
+            // Presence, not value: 0 is a real cursor (the box was just emptied).
+            int last = sp.contains("lastSeq") ? sp.getInt("lastSeq", 0) : -1;
             int seq = o.optInt("last", 0);
-            if (seq < last) {                // the box was emptied (Clear) or the gateway restarted
+            if (seq < last) {                 // the box went backwards: start from zero
                 last = 0;
-                sp.edit().putInt("lastSeq", 0).apply();
-                // fall through: anything in this response is new and must be announced
+                sp.edit().putInt("lastSeq", 0).apply();   // persist it even if nothing arrives
             }
             JSONArray arr = o.optJSONArray("messages");
             if (arr == null || arr.length() == 0) return;
             sp.edit().putInt("lastSeq", seq).apply();
-            Log.i(TAG, "poll seq=" + seq + " last=" + last + " init=" + initialised);
+            Log.i(TAG, "poll seq=" + seq + " last=" + last);
 
-            if (!initialised) {
-                // The only time silence is right: this copy has never synced before, so the box
-                // may hold a backlog nobody asked to be told about. After this, every message
-                // that arrives — including the first one after a Clear — speaks.
-                sp.edit().putBoolean("init", true).apply();
-                return;
-            }
+            // -1 means this copy has never synced at all (fresh install). Only then is a
+            // backlog allowed to pass silently; every later message, including the first
+            // one after a Clear, speaks.
+            if (last < 0) return;
 
             String text = null;
             for (int k = arr.length() - 1; k >= 0; k--) {

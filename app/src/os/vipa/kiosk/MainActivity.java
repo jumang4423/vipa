@@ -394,9 +394,7 @@ public class MainActivity extends Activity {
             try {
                 android.content.SharedPreferences sp = getSharedPreferences("vipa", 0);
                 // 0 is a real state: the box was emptied, so nothing has been seen yet.
-                android.content.SharedPreferences.Editor e = sp.edit().putBoolean("init", true);
-                if (seq != sp.getInt("lastSeq", 0)) e.putInt("lastSeq", seq);
-                e.apply();
+                if (seq != sp.getInt("lastSeq", 0)) sp.edit().putInt("lastSeq", seq).apply();
             } catch (Throwable ignored) {
             }
         }

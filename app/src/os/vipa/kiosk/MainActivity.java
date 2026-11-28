@@ -91,6 +91,7 @@ public class MainActivity extends Activity {
 
         web = new WebView(this);
         web.setBackgroundColor(0xFF000000);
+        web.addJavascriptInterface(new Bridge(), "vipa");
 
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -333,6 +334,21 @@ public class MainActivity extends Activity {
 
     static int pageHoldSeconds() {
         return 60;
+    }
+
+    /** The page reports what it actually drew, so a message read on screen is never
+     *  announced again as a notification when the phone is closed. */
+    public class Bridge {
+        @android.webkit.JavascriptInterface
+        public void seen(int seq) {
+            if (seq < 0) return;
+            try {
+                android.content.SharedPreferences sp = getSharedPreferences("vipa", 0);
+                // 0 is a real state: the box was emptied, so nothing has been seen yet.
+                if (seq != sp.getInt("lastSeq", 0)) sp.edit().putInt("lastSeq", seq).apply();
+            } catch (Throwable ignored) {
+            }
+        }
     }
 
     // ------------------------------------------------------------ which entrance

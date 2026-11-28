@@ -336,6 +336,7 @@ function poll() {
       if (d.last !== undefined && d.last < since) {
         thread.innerHTML = '';
         since = 0;
+        if (window.vipa && window.vipa.seen) { try { window.vipa.seen(0); } catch (e) {} }
         hideTyping();
         updateEmpty();
       }
@@ -346,6 +347,9 @@ function poll() {
         since = ms[i].seq;
         fresh++;
       }
+      // tell the Java side what has actually been drawn: a message seen here must not
+      // be announced again when the phone is closed
+      if (window.vipa && window.vipa.seen) { try { window.vipa.seen(since); } catch (e) {} }
       var lastRole = fresh ? ms[ms.length - 1].role : null;
       if (lastRole === 'user') showTyping();
       else if (lastRole === 'assistant') hideTyping();
